@@ -1,0 +1,9 @@
+.env
+*.db
+storage/
+ceremony_audio/
+__pycache__/
+*.pyc
+.venv/
+dist/
+*.egg-info/
