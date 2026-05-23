@@ -1,0 +1,33 @@
+# Ceremoni — Ceremony Configuration
+# Edit this file to set up graduation events, sessions, and college walk order.
+# After editing, restart the server or hit the "Reload Config" button.
+
+events:
+  - name: Spring 2026 Undergraduate
+    active: true
+    sessions:
+      - label: "Friday 9:00 AM"
+        date: "2026-05-15"
+        time: "9:00 AM"
+        colleges:
+          - College of Arts & Sciences
+          - Davis College of Agricultural Sciences & Natural Resources
+          - College of Education
+          - College of Media & Communication
+
+      - label: "Friday 1:30 PM"
+        date: "2026-05-15"
+        time: "1:30 PM"
+        colleges:
+          - Edward E. Whitacre Jr. College of Engineering
+          - Jerry S. Rawls College of Business Administration
+          - Huckabee College of Architecture
+          - School of Professional Studies
+
+      - label: "Saturday 9:00 AM"
+        date: "2026-05-16"
+        time: "9:00 AM"
+        colleges:
+          - College of Health & Human Sciences
+          - J.T. & Margaret Talkington College of Visual & Performing Arts
+          - Honors College
