@@ -42,7 +42,7 @@ templates = Jinja2Templates(directory=templates_dir)
 @app.get("/admin/dashboard")
 async def dashboard(request: Request):
     user = require_admin(request)
-    return templates.TemplateResponse("dashboard.html", context={"request": request, "user": user})
+    return templates.TemplateResponse(request, "dashboard.html", {"user": user})
 
 
 @app.get("/")
@@ -57,4 +57,4 @@ async def login_page(request: Request):
     if request.session.get("user"):
         from fastapi.responses import RedirectResponse
         return RedirectResponse("/admin/dashboard")
-    return templates.TemplateResponse("login.html", context={"request": request})
+    return templates.TemplateResponse(request, "login.html")
