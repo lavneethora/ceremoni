@@ -60,46 +60,15 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-### Environment Variables
+### Configuration
 
-Copy `.env.example` to `.env` and fill in:
-
-```
-OPENAI_API_KEY=           # OpenAI API key (for GPT-audio-1.5)
-AZURE_SPEECH_KEY=         # Azure Speech Services key
-AZURE_SPEECH_REGION=      # Azure region (e.g. southcentralus)
-MS_CLIENT_ID=             # Azure AD app client ID
-MS_TENANT_ID=             # Azure AD tenant ID
-MS_CLIENT_SECRET=         # Azure AD app client secret
-ADMIN_EMAILS=             # Comma-separated admin emails
-```
-
-### Ceremony Configuration
-
-Edit `ceremony.yaml` to define graduation events, sessions, and college walk order:
-
-```yaml
-events:
-  - name: Spring 2026 Undergraduate
-    active: true
-    sessions:
-      - label: "Friday 9:00 AM"
-        date: "2026-05-15"
-        time: "9:00 AM"
-        colleges:
-          - College of Arts & Sciences
-          - College of Education
-```
-
-The config is loaded into the database on server startup.
+The app requires environment variables for API keys and OAuth credentials. See `app/config.py` for the full list.
 
 ### Run
 
 ```bash
 uvicorn app.api.main:app --reload --port 8000
 ```
-
-Dashboard: `http://localhost:8000/admin`
 
 ## Project Structure
 
