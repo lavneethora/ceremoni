@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ceremoni — Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>ceremoni</h1>
+        <div class="header-right">
+            <span class="user-name">{{ user.name }}</span>
+            <a href="/admin/logout" class="btn btn-small">Logout</a>
+        </div>
+    </header>
+
+    <main id="ceremony-view">
+        <div class="controls">
+            <div class="controls-left">
+                <select id="session-select">
+                    <option value="">Select session</option>
+                </select>
+            </div>
+            <div class="controls-right">
+                <button id="sync-btn" class="btn btn-small">Sync Forms</button>
+                <button id="play-next-btn" class="btn btn-primary" disabled>Play Next</button>
+                <button id="reset-btn" class="btn btn-small">Reset</button>
+            </div>
+        </div>
+
+        <div class="now-playing" id="now-playing" style="display:none;">
+            <div class="now-playing-label">Now playing</div>
+            <div class="now-playing-name" id="now-playing-name"></div>
+            <div class="now-playing-meta" id="now-playing-meta"></div>
+            <audio id="audio-player" autoplay></audio>
+        </div>
+
+        <div class="student-list" id="student-list">
+            <div class="empty-state">Select a session to view students</div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>
