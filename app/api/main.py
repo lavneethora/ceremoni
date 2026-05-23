@@ -24,7 +24,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Ceremoni", version="0.1.0", lifespan=lifespan)
+
+# Trust proxy headers so OAuth callback URLs use https:// on Render
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 app.add_middleware(SessionMiddleware, secret_key=settings.ms_client_secret or "dev-secret-key")
+
+# Handle X-Forwarded-Proto from Render's reverse proxy
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 app.include_router(router)
 app.include_router(admin_router)
