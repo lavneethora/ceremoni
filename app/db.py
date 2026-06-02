@@ -3,7 +3,12 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
-engine = create_async_engine(settings.database_url, echo=False)
+# Supabase pooler needs SSL and prepared statement cache disabled
+connect_args = {}
+if "supabase" in settings.database_url or "pooler" in settings.database_url:
+    connect_args = {"ssl": "require", "statement_cache_size": 0}
+
+engine = create_async_engine(settings.database_url, echo=False, connect_args=connect_args)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
