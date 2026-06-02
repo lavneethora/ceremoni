@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
+    # Supabase (optional — uses local storage if not set)
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+    supabase_bucket: str = "ceremoni-audio"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

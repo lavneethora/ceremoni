@@ -91,10 +91,17 @@ async def get_audio(
     recording_id: str,
     session: AsyncSession = Depends(get_session),
 ):
+    from fastapi.responses import RedirectResponse
+
     rec = await session.get(Recording, recording_id)
     if not rec:
         raise HTTPException(404, "Recording not found")
     if not rec.generated_audio_url:
         raise HTTPException(404, "No generated audio available")
+
+    # If file is in Supabase, redirect to public URL
+    public_url = storage.get_public_url(rec.generated_audio_url)
+    if public_url:
+        return RedirectResponse(public_url)
 
     return FileResponse(rec.generated_audio_url, media_type="audio/mpeg", filename="ceremony_audio.mp3")
