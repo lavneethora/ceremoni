@@ -271,27 +271,37 @@ async def sync(access_token: str):
                 audio_content = None
                 audio_ext = ".m4a"
 
-                # Method 1: Direct URL in cell
+                # Method 1: Use Graph API "shares" endpoint to download from SharePoint URL
                 if voice_cell and voice_cell.startswith("http"):
                     try:
-                        audio_resp = await client.get(voice_cell, headers=headers, follow_redirects=True)
+                        import base64
+                        # Microsoft's encoding for share URLs: base64url + "u!" prefix
+                        encoded = base64.urlsafe_b64encode(voice_cell.encode()).decode().rstrip("=")
+                        share_id = f"u!{encoded}"
+                        share_url = f"https://graph.microsoft.com/v1.0/shares/{share_id}/driveItem/content"
+
+                        audio_resp = await client.get(share_url, headers=headers, follow_redirects=True)
                         if audio_resp.status_code == 200 and len(audio_resp.content) > 100:
                             audio_content = audio_resp.content
-                            if ".wav" in voice_cell.lower():
-                                audio_ext = ".wav"
-                            elif ".mp3" in voice_cell.lower():
-                                audio_ext = ".mp3"
-                            print(f"Forms sync: Downloaded audio from cell URL ({len(audio_content)} bytes)")
+                            cell_lower = voice_cell.lower()
+                            for ext in [".wav", ".mp3", ".m4a", ".mp4", ".ogg", ".webm", ".flac", ".aac", ".opus"]:
+                                if ext in cell_lower:
+                                    audio_ext = ext
+                                    break
+                            print(f"Forms sync: Downloaded audio via Graph shares API ({len(audio_content)} bytes)")
                         else:
-                            print(f"Forms sync: Cell URL returned {audio_resp.status_code}, {len(audio_resp.content)} bytes")
+                            print(f"Forms sync: Graph shares API returned {audio_resp.status_code}, trying direct URL...")
+                            # Fallback: try direct URL
+                            audio_resp = await client.get(voice_cell, headers=headers, follow_redirects=True)
+                            if audio_resp.status_code == 200 and len(audio_resp.content) > 100:
+                                audio_content = audio_resp.content
+                                print(f"Forms sync: Downloaded audio from direct URL ({len(audio_content)} bytes)")
                     except Exception as e:
                         print(f"Forms sync: Cell URL download failed: {e}")
 
                 # Method 2: Match by response ID in the OneDrive folder structure
                 if not audio_content and audio_files:
-                    # Forms organizes uploads by response ID in subfolders
                     for filename, info in audio_files.items():
-                        # Check if the parent folder matches the response ID
                         if info["parent_folder"] == response_id:
                             print(f"Forms sync: Found audio by response ID match: {info['name']}")
                             audio_content = await _download_audio(client, headers, info)
