@@ -219,9 +219,16 @@ select:focus {
 }
 
 .student-row .status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-size: 11px;
-    padding: 2px 8px;
+    line-height: 1;
+    padding: 4px 10px;
     border: 1px solid #e5e5e5;
+    min-width: 64px;
+    box-sizing: border-box;
+    text-align: center;
 }
 
 .student-row .status.ready {
