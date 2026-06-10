@@ -3,8 +3,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy import select
 
 from app.models import Recording, Student
-from app.services import audio_processor, phonetic_converter
-from app.services import tts_generator_elevenlabs as tts_generator
+from app.services import audio_processor, phonetic_converter, tts_generator
 from app.services.storage import storage
 
 
