@@ -5,10 +5,10 @@ from app.models import Student, Recording
 from app.services.storage import storage
 
 # The Excel workbook name at the root of OneDrive
-WORKBOOK_NAME = "Ceremoni — Graduation Name Pronunciation.xlsx"
+WORKBOOK_NAME = "Ceremoni - Graduation Name Pronunciation.xlsx"
 
 # The folder where Forms stores file uploads
-FORMS_FOLDER = "Ceremoni — Graduation Name Pronunciation"
+FORMS_FOLDER = "Ceremoni - Graduation Name Pronunciation"
 
 # Flexible column matching — if the header CONTAINS the key, it maps to the field
 COLUMN_PATTERNS = {
