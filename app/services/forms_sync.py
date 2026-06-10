@@ -165,13 +165,31 @@ async def sync(access_token: str):
     headers = {"Authorization": f"Bearer {access_token}"}
 
     async with httpx.AsyncClient(timeout=60) as client:
-        # Step 1: Access the workbook at the root of OneDrive
-        item_url = f"https://graph.microsoft.com/v1.0/me/drive/root:/{WORKBOOK_NAME}"
-        resp = await client.get(item_url, headers=headers)
-        if resp.status_code != 200:
-            return {"status": "error", "message": f"Could not find workbook: {resp.status_code}"}
+        # Step 1: Find the Ceremoni workbook on OneDrive
+        # Try exact name first, then fall back to searching for any Ceremoni*.xlsx file
+        workbook_id = None
 
-        workbook_id = resp.json()["id"]
+        resp = await client.get(
+            f"https://graph.microsoft.com/v1.0/me/drive/root:/{WORKBOOK_NAME}",
+            headers=headers,
+        )
+        if resp.status_code == 200:
+            workbook_id = resp.json()["id"]
+        else:
+            resp = await client.get(
+                "https://graph.microsoft.com/v1.0/me/drive/root/children?$top=200",
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                for item in resp.json().get("value", []):
+                    name = item.get("name", "")
+                    if name.lower().startswith("ceremoni") and name.lower().endswith(".xlsx"):
+                        workbook_id = item["id"]
+                        print(f"Forms sync: Found workbook by search: {name}")
+                        break
+
+        if not workbook_id:
+            return {"status": "error", "message": "Could not find Ceremoni workbook on OneDrive"}
 
         # Step 2: Read rows from the Excel workbook
         range_url = (
