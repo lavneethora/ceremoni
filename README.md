@@ -101,3 +101,9 @@ app/
   db.py                  # SQLAlchemy async engine + session
 ceremony.yaml            # Ceremony setup config
 ```
+
+## License
+
+Copyright Lavneet Hora 2026
+All rights reserved.
+This software is not licensed for distribution, modification, or commercial use without explicit written permission from the author.
