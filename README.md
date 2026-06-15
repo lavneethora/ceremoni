@@ -101,7 +101,3 @@ app/
   db.py                  # SQLAlchemy async engine + session
 ceremony.yaml            # Ceremony setup config
 ```
-
-## License
-
-MIT
