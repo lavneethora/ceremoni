@@ -2,9 +2,9 @@
 
 AI-powered graduation name pronunciation system for universities.
 
-Every graduation, name readers stumble through hundreds of names — especially international, non-Western, or unusually spelled ones. Ceremoni eliminates that. Students record themselves saying their name, the system extracts the exact phonetic pronunciation, and generates ceremony-ready audio that says each name *the way the student said it*.
+Every graduation, name readers stumble through hundreds of names - especially international, non-Western, or unusually spelled ones. Ceremoni eliminates that. Students record themselves saying their name, the system extracts the exact phonetic pronunciation, and generates ceremony-ready audio that says each name *the way the student said it*.
 
-Designed to be deployed at any institution — currently in active conversations with **Texas Tech University** to integrate Ceremoni into the official commencement workflow.
+Designed to be deployed at any institution - currently in active conversations with **Texas Tech University** to integrate Ceremoni into the official commencement workflow.
 
 ## How It Works
 
