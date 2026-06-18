@@ -1,8 +1,10 @@
 # Ceremoni
 
-AI-powered graduation name pronunciation system for Texas Tech University.
+AI-powered graduation name pronunciation system for universities.
 
-Students submit their name recordings via Microsoft Forms. The system processes each recording through an AI pipeline to generate ceremony-ready audio that pronounces every graduate's name correctly.
+Every graduation, name readers stumble through hundreds of names — especially international, non-Western, or unusually spelled ones. Ceremoni eliminates that. Students record themselves saying their name, the system extracts the exact phonetic pronunciation, and generates ceremony-ready audio that says each name *the way the student said it*.
+
+Designed to be deployed at any institution — currently in active conversations with **Texas Tech University** to integrate Ceremoni into the official commencement workflow.
 
 ## How It Works
 
@@ -37,7 +39,7 @@ Admin Dashboard
 - **Backend:** Python, FastAPI, SQLAlchemy (async), SQLite
 - **AI:** OpenAI GPT-audio-1.5 (phonetic extraction), Azure Speech Services (TTS)
 - **Audio:** Pydub, FFmpeg, noisereduce
-- **Auth:** Microsoft OAuth (MSAL) with TTU Azure AD tenant
+- **Auth:** Microsoft OAuth (MSAL) — works with any institution's Azure AD tenant
 - **Data Sync:** Microsoft Graph API (OneDrive/Forms)
 - **Frontend:** Vanilla JS, SortableJS, Inter font
 - **Task Queue:** Celery + Redis (async processing)
