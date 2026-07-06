@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # Admin auth
     admin_emails: str = ""  # comma-separated
+    session_secret: str = ""  # signs admin session cookies; falls back to ms_client_secret
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"

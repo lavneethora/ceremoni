@@ -2,12 +2,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_admin
 from app.db import get_session
 from app.models import Student, Recording
 from app.services.storage import storage
 from app.services import pipeline
 
-router = APIRouter()
+# Students submit via Microsoft Forms sync, not these endpoints — admin-only.
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 AUDIO_EXTENSIONS = {"mp3", "wav", "m4a", "mp4", "ogg", "webm", "flac", "aac", "wma", "opus"}
 MAX_SIZE = 25 * 1024 * 1024

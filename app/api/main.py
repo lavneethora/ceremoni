@@ -24,7 +24,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Ceremoni", version="0.1.0", lifespan=lifespan)
-app.add_middleware(SessionMiddleware, secret_key=settings.ms_client_secret or "dev-secret-key")
+
+_session_secret = settings.session_secret or settings.ms_client_secret
+if not _session_secret:
+    raise RuntimeError(
+        "SESSION_SECRET (or MS_CLIENT_SECRET) must be set — refusing to start "
+        "with a forgeable session key. Generate one: python -c 'import secrets; print(secrets.token_hex(32))'"
+    )
+app.add_middleware(SessionMiddleware, secret_key=_session_secret)
 
 app.include_router(router)
 app.include_router(admin_router)
