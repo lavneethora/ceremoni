@@ -1,4 +1,3 @@
-import asyncio
 import html
 
 import httpx
@@ -66,7 +65,7 @@ async def generate_tts(name: str, ipa: str | None = None) -> bytes:
         # If IPA SSML failed, fall back to plain name
         if ipa:
             print(f"  ⚠ ElevenLabs rejected IPA payload ({resp.status_code}): {resp.text[:200]}")
-            print(f"  Falling back to plain name...")
+            print("  Falling back to plain name...")
             payload["text"] = name
             resp = await client.post(url, headers=headers, json=payload)
             if resp.status_code == 200:

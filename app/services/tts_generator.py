@@ -43,7 +43,7 @@ def _generate_sync(name: str, ipa: str | None = None) -> bytes:
         # If IPA failed, warn and fall back
         cancellation = result.cancellation_details
         print(f"  ⚠ IPA rejected: {cancellation.error_details}")
-        print(f"  Falling back to plain text...")
+        print("  Falling back to plain text...")
 
     # Plain text fallback
     ssml = (

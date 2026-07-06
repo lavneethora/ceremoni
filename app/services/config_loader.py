@@ -7,7 +7,7 @@ This module reads the file and syncs it to the DB (idempotent — safe to run re
 
 import os
 import yaml
-from sqlalchemy import select, delete
+from sqlalchemy import delete
 
 from app.db import async_session
 from app.models import GraduationEvent, CeremonySession, SessionCollege

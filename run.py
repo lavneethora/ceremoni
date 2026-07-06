@@ -12,7 +12,7 @@ from pydub.playback import play as pydub_play
 from app.db import init_db, async_session
 from app.models import Student, Recording
 from app.services.storage import storage
-from app.services import pipeline, phonetic_converter, tts_generator
+from app.services import pipeline
 
 
 SAMPLE_RATE = 16000
@@ -20,7 +20,8 @@ CEREMONY_DIR = "./ceremony_audio"
 
 
 def _record_audio() -> bytes | None:
-    import termios, tty
+    import termios
+    import tty
 
     print("\nPress Enter to START recording...")
     input()

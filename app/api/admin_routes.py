@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 from app.auth import get_login_url, handle_callback, require_admin
 from app.db import get_session
 from app.models import (
-    Student, Recording, GraduationEvent, CeremonySession, SessionCollege,
+    Student, Recording, GraduationEvent, SessionCollege,
 )
 
 router = APIRouter(prefix="/admin")
@@ -157,7 +157,7 @@ async def next_student(
     result = await session.execute(
         select(Student)
         .options(selectinload(Student.recordings))
-        .where(Student.college.in_(college_names), Student.played == False)
+        .where(Student.college.in_(college_names), Student.played.is_(False))
     )
     students = result.scalars().all()
 

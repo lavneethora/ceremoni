@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
 
-from app.models import Recording, Student
+from app.models import Recording
 from app.services import audio_processor, phonetic_converter, tts_generator
 from app.services.storage import storage
 
