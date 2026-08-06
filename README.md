@@ -109,3 +109,4 @@ ceremony.yaml            # Ceremony setup config
 Copyright Lavneet Hora 2026 <br>
 All rights reserved. <br>
 This software is not licensed for distribution, modification, or commercial use without explicit written permission from the author.
+
