@@ -52,6 +52,12 @@ async def dashboard(request: Request):
     return templates.TemplateResponse(request, "dashboard.html", {"user": user})
 
 
+@app.get("/admin/reader")
+async def reader(request: Request):
+    user = require_admin(request)
+    return templates.TemplateResponse(request, "reader.html", {"user": user})
+
+
 @app.get("/")
 async def root():
     from fastapi.responses import RedirectResponse
