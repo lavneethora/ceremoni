@@ -1,0 +1,221 @@
+/* Reader Mode: announcer-facing view, tablet friendly */
+
+.reader-body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+}
+
+.reader-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid #e5e5e5;
+    flex-shrink: 0;
+}
+
+.reader-header h1 {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.reader-tag {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b6b6b;
+    padding: 2px 8px;
+    border: 1px solid #e5e5e5;
+}
+
+.reader-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    gap: 24px;
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.reader-controls {
+    display: flex;
+    justify-content: center;
+}
+
+.reader-controls select {
+    min-width: 320px;
+    font-size: 15px;
+    padding: 10px 14px;
+}
+
+.reader-empty {
+    padding: 80px 0;
+    text-align: center;
+    color: #6b6b6b;
+    font-size: 15px;
+}
+
+.reader-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+    padding: 24px 0;
+}
+
+.reader-current {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+    max-width: 100%;
+}
+
+.reader-current-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b6b6b;
+}
+
+.reader-current-name {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-weight: 700;
+    letter-spacing: -1.5px;
+    line-height: 1.05;
+    font-size: clamp(44px, 8vw, 96px);
+    color: #1a1a1a;
+    word-break: break-word;
+    max-width: 100%;
+}
+
+.reader-current-meta {
+    font-size: 15px;
+    color: #6b6b6b;
+    max-width: 100%;
+}
+
+.reader-play-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 48px;
+    min-width: 260px;
+    min-height: 72px;
+    font-family: inherit;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    color: #fff;
+    background: #1a1a1a;
+    border: 1px solid #1a1a1a;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.reader-play-btn:hover:not(:disabled) {
+    background: #333;
+}
+
+.reader-play-btn:disabled {
+    background: #ccc;
+    border-color: #ccc;
+    cursor: not-allowed;
+}
+
+.reader-hint {
+    font-size: 12px;
+    color: #6b6b6b;
+    margin-top: -12px;
+}
+
+.reader-hint kbd {
+    display: inline-block;
+    padding: 2px 8px;
+    font-family: inherit;
+    font-size: 11px;
+    color: #1a1a1a;
+    background: #fafafa;
+    border: 1px solid #e5e5e5;
+    border-bottom-width: 2px;
+}
+
+.reader-upcoming {
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.reader-upcoming-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b6b6b;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.reader-upcoming-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.reader-upcoming-list li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.reader-upcoming-list li:last-child {
+    border-bottom: none;
+}
+
+.reader-upcoming-name {
+    font-weight: 500;
+    font-size: 15px;
+    color: #1a1a1a;
+}
+
+.reader-upcoming-meta {
+    font-size: 12px;
+    color: #6b6b6b;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* Mobile / small tablets */
+@media (max-width: 640px) {
+    .reader-main {
+        padding: 16px;
+        gap: 16px;
+    }
+
+    .reader-controls select {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .reader-play-btn {
+        width: 100%;
+        min-width: 0;
+    }
+}
