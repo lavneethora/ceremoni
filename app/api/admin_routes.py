@@ -138,6 +138,23 @@ async def reorder_students(
     return {"status": "ok"}
 
 
+@router.post("/api/students/{student_id}/reprocess")
+async def reprocess_student(student_id: str, request: Request):
+    """Re-download this student's audio from OneDrive and re-run the full pipeline."""
+    require_admin(request)
+    access_token = request.session.get("user", {}).get("access_token")
+    if not access_token:
+        raise HTTPException(401, "No access token, please log out and log back in")
+
+    from app.services.forms_sync import reprocess_single_student
+    try:
+        return await reprocess_single_student(access_token, student_id)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
+
+
 # --- Ceremony Playback ---
 
 @router.get("/api/ceremony/next")
@@ -178,6 +195,56 @@ async def next_student(
         "college": next_student.college,
         "major": next_student.major,
         "has_audio": bool(next_student.recordings and next_student.recordings[0].generated_audio_url),
+    }
+
+
+@router.get("/api/ceremony/upcoming")
+async def upcoming_students(
+    request: Request,
+    session_id: str,
+    limit: int = 4,
+    session: AsyncSession = Depends(get_session),
+):
+    """Return the next N unplayed students for a session (for Reader Mode preview)."""
+    require_admin(request)
+
+    if limit < 1:
+        limit = 1
+    if limit > 50:
+        limit = 50
+
+    result = await session.execute(
+        select(SessionCollege).where(SessionCollege.session_id == session_id).order_by(SessionCollege.college_order)
+    )
+    college_names = [sc.college for sc in result.scalars().all()]
+    college_order = {name: i for i, name in enumerate(college_names)}
+
+    result = await session.execute(
+        select(Student)
+        .options(selectinload(Student.recordings))
+        .where(Student.college.in_(college_names), Student.played.is_(False))
+    )
+    students = result.scalars().all()
+
+    def sort_key(s):
+        c_order = college_order.get(s.college, 999)
+        last_name = s.typed_name.split()[-1] if s.typed_name else ""
+        return (s.sort_order or 99999, c_order, s.major or "", last_name)
+
+    students.sort(key=sort_key)
+
+    return {
+        "queue": [
+            {
+                "id": s.id,
+                "typed_name": s.typed_name,
+                "college": s.college,
+                "major": s.major,
+                "has_audio": bool(s.recordings and s.recordings[0].generated_audio_url),
+            }
+            for s in students[:limit]
+        ],
+        "total_remaining": len(students),
     }
 
 
