@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ceremoni Reader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/reader.css">
+</head>
+<body class="reader-body">
+    <header class="reader-header">
+        <h1>ceremoni <span class="reader-tag">reader</span></h1>
+        <div class="header-right">
+            <span class="user-name">{{ user.name }}</span>
+            <a href="/admin/dashboard" class="btn btn-small">Dashboard</a>
+            <a href="/admin/logout" class="btn btn-small">Logout</a>
+        </div>
+    </header>
+
+    <main class="reader-main">
+        <div class="reader-controls">
+            <select id="session-select">
+                <option value="">Select session</option>
+            </select>
+        </div>
+
+        <section class="reader-stage" id="reader-stage" hidden>
+            <div class="reader-current" id="reader-current">
+                <div class="reader-current-label">Now announcing</div>
+                <div class="reader-current-name" id="reader-current-name">Ready</div>
+                <div class="reader-current-meta" id="reader-current-meta"></div>
+            </div>
+
+            <button class="reader-play-btn" id="reader-play-btn" type="button" disabled>Play Next</button>
+            <div class="reader-hint">Or press <kbd>Space</kbd></div>
+
+            <div class="reader-upcoming">
+                <div class="reader-upcoming-label">Up next</div>
+                <ol class="reader-upcoming-list" id="reader-upcoming-list"></ol>
+            </div>
+        </section>
+
+        <div class="reader-empty" id="reader-empty">Pick a session to begin.</div>
+
+        <audio id="reader-audio" preload="auto"></audio>
+    </main>
+
+    <script src="/static/reader.js"></script>
+</body>
+</html>

@@ -95,9 +95,42 @@ function renderStudents() {
         status.className = 'status ' + statusClass;
         status.textContent = statusText;
 
+        const reprocessBtn = document.createElement('button');
+        reprocessBtn.className = 'btn-icon reprocess-btn';
+        reprocessBtn.type = 'button';
+        reprocessBtn.textContent = '↻';
+        reprocessBtn.title = "Re-download and re-process this student's audio";
+        reprocessBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (reprocessBtn.disabled) return;
+            reprocessBtn.disabled = true;
+            const prevStatusText = status.textContent;
+            const prevStatusClass = status.className;
+            status.className = 'status processing';
+            status.textContent = 'Processing';
+            try {
+                const resp = await fetch(`/admin/api/students/${s.id}/reprocess`, {method: 'POST'});
+                const data = await resp.json();
+                if (data.status === 'ok') {
+                    if (currentSessionId) await loadStudents();
+                } else {
+                    alert('Re-process failed: ' + (data.message || 'Unknown error'));
+                    status.className = prevStatusClass;
+                    status.textContent = prevStatusText;
+                    reprocessBtn.disabled = false;
+                }
+            } catch (err) {
+                alert('Re-process error: ' + err.message);
+                status.className = prevStatusClass;
+                status.textContent = prevStatusText;
+                reprocessBtn.disabled = false;
+            }
+        });
+
         row.appendChild(handle);
         row.appendChild(name);
         row.appendChild(major);
+        row.appendChild(reprocessBtn);
         row.appendChild(status);
         studentList.appendChild(row);
     }
