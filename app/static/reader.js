@@ -2,6 +2,7 @@ let currentSessionId = null;
 let queue = [];
 let currentStudent = null;
 let isPlaying = false;
+let history = []; // stack of student objects played this session (this browser tab)
 
 const sessionSelect = document.getElementById('session-select');
 const stage = document.getElementById('reader-stage');
@@ -9,6 +10,7 @@ const empty = document.getElementById('reader-empty');
 const currentName = document.getElementById('reader-current-name');
 const currentMeta = document.getElementById('reader-current-meta');
 const playBtn = document.getElementById('reader-play-btn');
+const backBtn = document.getElementById('reader-back-btn');
 const upcomingList = document.getElementById('reader-upcoming-list');
 const audio = document.getElementById('reader-audio');
 
@@ -28,8 +30,10 @@ async function init() {
 
 sessionSelect.addEventListener('change', async () => {
     currentSessionId = sessionSelect.value;
+    history = [];
     if (!currentSessionId) {
         showEmpty('Pick a session to begin.');
+        render();
         return;
     }
     await loadQueue();
@@ -43,6 +47,8 @@ async function loadQueue() {
 }
 
 function render() {
+    backBtn.disabled = history.length === 0 || isPlaying;
+
     if (queue.length === 0) {
         currentStudent = null;
         stage.hidden = true;
@@ -86,10 +92,12 @@ async function playNext() {
     if (!currentStudent || isPlaying) return;
     isPlaying = true;
     playBtn.disabled = true;
-    const studentId = currentStudent.id;
+    backBtn.disabled = true;
+    const student = currentStudent;
     try {
-        const resp = await fetch('/admin/api/ceremony/play/' + studentId, {method: 'POST'});
+        const resp = await fetch('/admin/api/ceremony/play/' + student.id, {method: 'POST'});
         const data = await resp.json();
+        history.push(student);
         if (data.audio_url) {
             audio.src = data.audio_url;
             try {
@@ -115,10 +123,29 @@ async function playNext() {
         console.error('play failed', e);
         isPlaying = false;
         playBtn.disabled = false;
+        backBtn.disabled = history.length === 0;
+    }
+}
+
+async function goBack() {
+    if (history.length === 0 || isPlaying) return;
+    isPlaying = true;
+    playBtn.disabled = true;
+    backBtn.disabled = true;
+    const student = history.pop();
+    try {
+        await fetch('/admin/api/ceremony/unplay/' + student.id, {method: 'POST'});
+    } catch (e) {
+        console.error('unplay failed', e);
+        history.push(student); // put it back so the user can retry
+    } finally {
+        isPlaying = false;
+        await loadQueue();
     }
 }
 
 playBtn.addEventListener('click', playNext);
+backBtn.addEventListener('click', goBack);
 
 document.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && !e.repeat) {

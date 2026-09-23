@@ -274,6 +274,23 @@ async def play_student(
     }
 
 
+@router.post("/api/ceremony/unplay/{student_id}")
+async def unplay_student(
+    student_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    require_admin(request)
+    student = await session.get(Student, student_id)
+    if not student:
+        raise HTTPException(404, "Student not found")
+
+    student.played = False
+    await session.commit()
+
+    return {"id": student.id, "typed_name": student.typed_name, "played": student.played}
+
+
 @router.post("/api/ceremony/reset")
 async def reset_ceremony(
     request: Request,
