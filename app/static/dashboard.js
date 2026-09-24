@@ -103,7 +103,8 @@ function renderStudents() {
         }
 
         const row = document.createElement('div');
-        row.className = 'student-row' + (s.played ? ' played' : '') + (unseated ? ' unseated' : '');
+        row.className = 'student-row' + (s.played ? ' played' : '')
+            + (seating ? ' seating' : '') + (unseated ? ' unseated' : '');
         row.dataset.id = s.id;
 
         const lead = document.createElement('span');
