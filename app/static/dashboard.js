@@ -1,6 +1,9 @@
 let currentSessionId = null;
 let students = [];
 let sortableInstance = null;
+const sessionOptions = {};
+
+const HONORS_LABELS = {honors: 'With honors', highest_honors: 'With highest honors'};
 
 const sessionSelect = document.getElementById('session-select');
 const playNextBtn = document.getElementById('play-next-btn');
@@ -22,12 +25,17 @@ async function init() {
 
     for (const event of events) {
         for (const session of event.sessions) {
+            sessionOptions[session.id] = {roster: session.roster, order: session.order};
             const opt = document.createElement('option');
             opt.value = session.id;
             opt.textContent = event.name + ' — ' + session.label;
             sessionSelect.appendChild(opt);
         }
     }
+}
+
+function isSeatingSession() {
+    return (sessionOptions[currentSessionId] || {}).order === 'seating';
 }
 
 sessionSelect.addEventListener('change', async () => {
@@ -54,32 +62,58 @@ function createEmptyState(text) {
     return div;
 }
 
+function createHeader(text) {
+    const header = document.createElement('div');
+    header.className = 'student-group-header';
+    header.textContent = text;
+    return header;
+}
+
 function renderStudents() {
     studentList.replaceChildren();
+    if (sortableInstance) {
+        sortableInstance.destroy();
+        sortableInstance = null;
+    }
 
     if (students.length === 0) {
         studentList.appendChild(createEmptyState('No students in this session'));
         return;
     }
 
+    const seating = isSeatingSession();
     let currentCollege = '';
+    let sawSeated = false;
+    let sawUnseated = false;
 
     for (const s of students) {
-        if (s.college !== currentCollege) {
+        const unseated = seating && s.seat_position === null;
+
+        if (seating) {
+            if (!unseated && !sawSeated) {
+                sawSeated = true;
+                studentList.appendChild(createHeader('Seating order'));
+            } else if (unseated && !sawUnseated) {
+                sawUnseated = true;
+                studentList.appendChild(createHeader('Not yet seated'));
+            }
+        } else if (s.college !== currentCollege) {
             currentCollege = s.college;
-            const header = document.createElement('div');
-            header.className = 'student-group-header';
-            header.textContent = currentCollege;
-            studentList.appendChild(header);
+            studentList.appendChild(createHeader(currentCollege));
         }
 
         const row = document.createElement('div');
-        row.className = 'student-row' + (s.played ? ' played' : '');
+        row.className = 'student-row' + (s.played ? ' played' : '') + (unseated ? ' unseated' : '');
         row.dataset.id = s.id;
 
-        const handle = document.createElement('span');
-        handle.className = 'drag-handle';
-        handle.textContent = '::';
+        const lead = document.createElement('span');
+        if (seating) {
+            lead.className = 'seat-number';
+            lead.textContent = unseated ? '' : String(s.seat_position);
+        } else {
+            lead.className = 'drag-handle';
+            lead.textContent = '::';
+        }
 
         const name = document.createElement('span');
         name.className = 'name';
@@ -127,22 +161,29 @@ function renderStudents() {
             }
         });
 
-        row.appendChild(handle);
+        row.appendChild(lead);
         row.appendChild(name);
         row.appendChild(major);
+        if (s.honors_level) {
+            const honors = document.createElement('span');
+            honors.className = 'honors-tag';
+            honors.textContent = s.honors_level === 'highest_honors' ? 'Highest honors' : 'Honors';
+            row.appendChild(honors);
+        }
         row.appendChild(reprocessBtn);
         row.appendChild(status);
         studentList.appendChild(row);
     }
 
-    // Initialize sortable
-    if (sortableInstance) sortableInstance.destroy();
-    sortableInstance = new Sortable(studentList, {
-        handle: '.drag-handle',
-        ghostClass: 'sortable-ghost',
-        filter: '.student-group-header',
-        onEnd: saveOrder,
-    });
+    // Drag reorder writes the global sort order, so it is only for college based sessions
+    if (!seating) {
+        sortableInstance = new Sortable(studentList, {
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            filter: '.student-group-header',
+            onEnd: saveOrder,
+        });
+    }
 }
 
 async function saveOrder() {
@@ -165,6 +206,12 @@ playNextBtn.addEventListener('click', async () => {
 
     if (data.done) {
         nowPlaying.style.display = 'block';
+        const started = document.querySelector('.student-row.played');
+        if (isSeatingSession() && !started) {
+            nowPlayingName.textContent = 'No one is seated yet';
+            nowPlayingMeta.textContent = '';
+            return;
+        }
         nowPlayingName.textContent = 'Ceremony complete';
         nowPlayingMeta.textContent = '';
         playNextBtn.disabled = true;
@@ -172,13 +219,14 @@ playNextBtn.addEventListener('click', async () => {
     }
 
     // Mark as played and get audio
-    const playResp = await fetch('/admin/api/ceremony/play/' + data.id, {method: 'POST'});
+    const playResp = await fetch('/admin/api/ceremony/play/' + data.id + '?session_id=' + currentSessionId, {method: 'POST'});
     const playData = await playResp.json();
 
     // Show now playing
     nowPlaying.style.display = 'block';
     nowPlayingName.textContent = data.typed_name;
-    nowPlayingMeta.textContent = (data.college || '') + ' — ' + (data.major || '');
+    nowPlayingMeta.textContent = (data.college || '') + ' — ' + (data.major || '')
+        + (data.honors_level ? ' — ' + HONORS_LABELS[data.honors_level] : '');
 
     // Highlight active row
     document.querySelectorAll('.student-row').forEach(row => row.classList.remove('active'));
