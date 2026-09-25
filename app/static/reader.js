@@ -15,6 +15,21 @@ const playBtn = document.getElementById('reader-play-btn');
 const backBtn = document.getElementById('reader-back-btn');
 const upcomingList = document.getElementById('reader-upcoming-list');
 const audio = document.getElementById('reader-audio');
+const notice = document.getElementById('reader-notice');
+
+// Roster sessions only announce a current clip; other sessions report no announcement state
+function isBlocked(student) {
+    return !!student && !!student.announcement && student.announcement !== 'ready';
+}
+
+function showNotice(text) {
+    notice.textContent = text;
+    notice.hidden = false;
+}
+
+function hideNotice() {
+    notice.hidden = true;
+}
 
 async function init() {
     const resp = await fetch('/admin/api/events');
@@ -81,7 +96,13 @@ function render() {
         upcomingList.appendChild(li);
     }
 
-    playBtn.disabled = !currentStudent || isPlaying;
+    const blocked = isBlocked(currentStudent);
+    playBtn.disabled = !currentStudent || isPlaying || blocked;
+    if (blocked) {
+        showNotice(`The announcement for ${currentStudent.typed_name} is not ready. Ask an admin to generate announcements.`);
+    } else {
+        hideNotice();
+    }
 }
 
 function showEmpty(msg) {
@@ -91,13 +112,20 @@ function showEmpty(msg) {
 }
 
 async function playNext() {
-    if (!currentStudent || isPlaying) return;
+    if (!currentStudent || isPlaying || isBlocked(currentStudent)) return;
     isPlaying = true;
     playBtn.disabled = true;
     backBtn.disabled = true;
     const student = currentStudent;
     try {
         const resp = await fetch('/admin/api/ceremony/play/' + student.id + '?session_id=' + currentSessionId, {method: 'POST'});
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            isPlaying = false;
+            await loadQueue();
+            showNotice(err.detail || 'Could not play this student.');
+            return;
+        }
         const data = await resp.json();
         history.push(student);
         if (data.audio_url) {
