@@ -112,6 +112,26 @@ header h1 {
 .controls-right {
     display: flex;
     gap: 8px;
+    align-items: center;
+}
+
+.roster-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 8px;
+    padding-right: 16px;
+    border-right: 1px solid #e5e5e5;
+}
+
+.roster-tools[hidden] {
+    display: none;
+}
+
+.announce-status {
+    color: #6b6b6b;
+    font-size: 12px;
+    margin-right: 4px;
 }
 
 select {
@@ -238,6 +258,17 @@ select:focus {
 .student-row .name {
     flex: 1;
     font-weight: 500;
+}
+
+.student-row .no-recording {
+    margin-left: 8px;
+    padding: 1px 6px;
+    border: 1px solid #e5e5e5;
+    color: #9a6700;
+    border-color: #9a6700;
+    font-size: 11px;
+    font-weight: 400;
+    white-space: nowrap;
 }
 
 .student-row .major {
