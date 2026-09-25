@@ -16,10 +16,15 @@ from app.auth import require_admin
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    # Load ceremony config from ceremony.yaml on startup
+    # Load ceremony config from ceremony.yaml on startup; a bad config must not stop the site
     from app.services.config_loader import load_ceremony_config
-    result = await load_ceremony_config()
-    print(f"Ceremony config loaded: {result}")
+    try:
+        result = await load_ceremony_config()
+        print(f"Ceremony config loaded: {result}")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Ceremony config FAILED to load, starting without reload: {e}")
     yield
 
 
