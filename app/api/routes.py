@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_admin
 from app.db import get_session
-from app.models import Student, Recording
+from app.models import Student, Recording, SessionEntry
 from app.services.storage import storage
 from app.services import pipeline
 
@@ -107,3 +107,21 @@ async def get_audio(
         return RedirectResponse(public_url)
 
     return FileResponse(rec.generated_audio_url, media_type="audio/mpeg", filename="ceremony_audio.mp3")
+
+
+@router.get("/audio/announcement/{entry_id}")
+async def get_announcement_audio(
+    entry_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    from fastapi.responses import RedirectResponse
+
+    entry = await session.get(SessionEntry, entry_id)
+    if not entry or not entry.announcement_audio_path:
+        raise HTTPException(404, "No announcement audio available")
+
+    public_url = storage.get_public_url(entry.announcement_audio_path)
+    if public_url:
+        return RedirectResponse(public_url)
+
+    return FileResponse(entry.announcement_audio_path, media_type="audio/mpeg", filename="announcement.mp3")

@@ -72,6 +72,23 @@
     padding: 24px 0;
 }
 
+.reader-stage[hidden] {
+    display: none;
+}
+
+.reader-notice {
+    max-width: 520px;
+    padding: 10px 14px;
+    border: 1px solid #9a6700;
+    color: #9a6700;
+    font-size: 13px;
+    text-align: center;
+}
+
+.reader-notice[hidden] {
+    display: none;
+}
+
 .reader-current {
     display: flex;
     flex-direction: column;

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,13 +9,27 @@ from app.db import get_session
 from app.models import (
     Student, Recording, GraduationEvent,
 )
+from app.services.announcements import (
+    AnnouncementNotReady,
+    announcement_state,
+    announcement_status,
+    get_ready_entry,
+    start_generation,
+)
 from app.services.config_loader import get_session_options
-from app.services.session_queue import load_session_rows, reset_played, set_played
+from app.services.roster_import import RosterImportError, import_roster
+from app.services.session_queue import get_session_mode, load_session_rows, reset_played, set_played
 
 router = APIRouter(prefix="/admin")
 
+MAX_ROSTER_BYTES = 2 * 1024 * 1024
 
-def _student_payload(row) -> dict:
+
+def _announcement(row, roster: bool) -> str | None:
+    return announcement_state(row.entry, row.student) if roster and row.entry else None
+
+
+def _student_payload(row, roster: bool = False) -> dict:
     student = row.student
     recordings = student.recordings
     return {
@@ -30,10 +44,12 @@ def _student_payload(row) -> dict:
         "honors_level": row.honors_level,
         "status": recordings[0].processing_status if recordings else "no_recording",
         "has_audio": bool(recordings and recordings[0].generated_audio_url),
+        "has_recording": bool(recordings),
+        "announcement": _announcement(row, roster),
     }
 
 
-def _queue_payload(row) -> dict:
+def _queue_payload(row, roster: bool = False) -> dict:
     student = row.student
     return {
         "id": student.id,
@@ -43,6 +59,7 @@ def _queue_payload(row) -> dict:
         "seat_position": row.seat_position,
         "honors_level": row.honors_level,
         "has_audio": bool(student.recordings and student.recordings[0].generated_audio_url),
+        "announcement": _announcement(row, roster),
     }
 
 
@@ -124,7 +141,7 @@ async def list_students(
     require_admin(request)
 
     loaded = await load_session_rows(session, session_id)
-    return [_student_payload(row) for row in loaded.rows]
+    return [_student_payload(row, loaded.mode.roster) for row in loaded.rows]
 
 
 @router.patch("/api/students/reorder")
@@ -169,11 +186,12 @@ async def next_student(
 ):
     require_admin(request)
 
-    queue = (await load_session_rows(session, session_id)).queue()
+    loaded = await load_session_rows(session, session_id)
+    queue = loaded.queue()
     if not queue:
         return {"done": True}
 
-    return _queue_payload(queue[0])
+    return _queue_payload(queue[0], loaded.mode.roster)
 
 
 @router.get("/api/ceremony/upcoming")
@@ -191,10 +209,11 @@ async def upcoming_students(
     if limit > 50:
         limit = 50
 
-    queue = (await load_session_rows(session, session_id)).queue()
+    loaded = await load_session_rows(session, session_id)
+    queue = loaded.queue()
 
     return {
-        "queue": [_queue_payload(row) for row in queue[:limit]],
+        "queue": [_queue_payload(row, loaded.mode.roster) for row in queue[:limit]],
         "total_remaining": len(queue),
     }
 
@@ -207,10 +226,28 @@ async def play_student(
     session: AsyncSession = Depends(get_session),
 ):
     require_admin(request)
+
+    # A roster session only ever plays a current announcement clip, checked before anything is marked played
+    entry = None
+    if get_session_mode(session_id).roster:
+        try:
+            entry = await get_ready_entry(session, session_id, student_id)
+        except LookupError as e:
+            raise HTTPException(404, str(e))
+        except AnnouncementNotReady as e:
+            raise HTTPException(409, str(e))
+
     try:
         student = await set_played(session, session_id, student_id, True)
     except LookupError as e:
         raise HTTPException(404, str(e))
+
+    if entry is not None:
+        return {
+            "id": student.id,
+            "typed_name": student.typed_name,
+            "audio_url": f"/audio/announcement/{entry.id}",
+        }
 
     result = await session.execute(
         select(Recording).where(Recording.student_id == student_id, Recording.generated_audio_url.isnot(None))
@@ -249,6 +286,51 @@ async def reset_ceremony(
     require_admin(request)
     await reset_played(session, session_id)
     return {"status": "reset"}
+
+
+# --- Roster sessions: import and announcement clips ---
+
+def _require_roster_session(session_id: str) -> None:
+    if not get_session_mode(session_id).roster:
+        raise HTTPException(400, "This session does not use a roster")
+
+
+@router.post("/api/sessions/{session_id}/roster/import")
+async def import_session_roster(
+    session_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(get_session),
+):
+    require_admin(request)
+    _require_roster_session(session_id)
+
+    data = await file.read()
+    if len(data) > MAX_ROSTER_BYTES:
+        raise HTTPException(400, "The file is larger than 2 MB")
+    try:
+        return await import_roster(session, session_id, data)
+    except RosterImportError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.post("/api/sessions/{session_id}/announcements/generate")
+async def generate_announcements(session_id: str, request: Request):
+    require_admin(request)
+    _require_roster_session(session_id)
+    started = start_generation(session_id)
+    return {"status": "started" if started else "already_running"}
+
+
+@router.get("/api/sessions/{session_id}/announcements/status")
+async def session_announcement_status(
+    session_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    require_admin(request)
+    _require_roster_session(session_id)
+    return await announcement_status(session, session_id)
 
 
 # --- Debug: raw Excel data ---

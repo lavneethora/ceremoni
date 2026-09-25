@@ -14,6 +14,13 @@ const nowPlaying = document.getElementById('now-playing');
 const nowPlayingName = document.getElementById('now-playing-name');
 const nowPlayingMeta = document.getElementById('now-playing-meta');
 const audioPlayer = document.getElementById('audio-player');
+const rosterTools = document.getElementById('roster-tools');
+const announceStatus = document.getElementById('announce-status');
+const importBtn = document.getElementById('import-btn');
+const generateBtn = document.getElementById('generate-btn');
+const rosterFile = document.getElementById('roster-file');
+
+let statusTimer = null;
 
 // Load events and sessions on page load
 async function init() {
@@ -38,8 +45,15 @@ function isSeatingSession() {
     return (sessionOptions[currentSessionId] || {}).order === 'seating';
 }
 
+function isRosterSession() {
+    return (sessionOptions[currentSessionId] || {}).roster === true;
+}
+
 sessionSelect.addEventListener('change', async () => {
     currentSessionId = sessionSelect.value;
+    clearTimeout(statusTimer);
+    rosterTools.hidden = !isRosterSession();
+    announceStatus.textContent = '';
     if (currentSessionId) {
         await loadStudents();
         playNextBtn.disabled = false;
@@ -53,6 +67,40 @@ async function loadStudents() {
     const resp = await fetch('/admin/api/students?session_id=' + currentSessionId);
     students = await resp.json();
     renderStudents();
+    if (isRosterSession()) await refreshAnnounceStatus();
+}
+
+// Announcement clip progress for roster sessions; polls while a generation run is going
+async function refreshAnnounceStatus() {
+    clearTimeout(statusTimer);
+    const sessionId = currentSessionId;
+    const resp = await fetch(`/admin/api/sessions/${sessionId}/announcements/status`);
+    if (!resp.ok || sessionId !== currentSessionId) return;
+    const st = await resp.json();
+
+    const needs = st.stale + st.missing;
+    let text;
+    if (st.total === 0) {
+        text = 'No roster yet';
+    } else if (st.running) {
+        text = `Generating: ${st.ready} of ${st.total} ready`;
+    } else if (needs === 0) {
+        text = `All ${st.total} announcements ready`;
+    } else {
+        text = `${st.ready} of ${st.total} ready, ${needs} need generating`;
+    }
+    if (st.failed.length > 0) text += `, ${st.failed.length} failed`;
+    if (st.no_recording > 0) text += `, ${st.no_recording} without a recording`;
+    announceStatus.textContent = text;
+    announceStatus.title = st.failed.map(f => `${f.name}: ${f.message}`).join('\n');
+    generateBtn.disabled = st.running || st.total === 0;
+
+    if (st.running) {
+        statusTimer = setTimeout(async () => {
+            await refreshAnnounceStatus();
+            if (!generateBtn.disabled && currentSessionId === sessionId) await loadStudents();
+        }, 3000);
+    }
 }
 
 function createEmptyState(text) {
@@ -82,6 +130,7 @@ function renderStudents() {
     }
 
     const seating = isSeatingSession();
+    const roster = isRosterSession();
     let currentCollege = '';
     let sawSeated = false;
     let sawUnseated = false;
@@ -119,14 +168,28 @@ function renderStudents() {
         const name = document.createElement('span');
         name.className = 'name';
         name.textContent = s.typed_name;
+        if (roster && s.has_recording === false) {
+            const tag = document.createElement('span');
+            tag.className = 'no-recording';
+            tag.title = 'No voice recording, announced with the plain voice';
+            tag.textContent = 'No recording';
+            name.appendChild(tag);
+        }
 
         const major = document.createElement('span');
         major.className = 'major';
         major.textContent = s.major || '';
 
         const status = document.createElement('span');
-        const statusClass = s.has_audio ? 'ready' : (s.status === 'processing' ? 'processing' : 'pending');
-        const statusText = s.has_audio ? 'Ready' : (s.status === 'processing' ? 'Processing' : 'Pending');
+        let statusClass;
+        let statusText;
+        if (roster) {
+            statusClass = s.announcement === 'ready' ? 'ready' : (s.announcement === 'stale' ? 'processing' : 'pending');
+            statusText = s.announcement === 'ready' ? 'Ready' : (s.announcement === 'stale' ? 'Outdated' : 'Pending');
+        } else {
+            statusClass = s.has_audio ? 'ready' : (s.status === 'processing' ? 'processing' : 'pending');
+            statusText = s.has_audio ? 'Ready' : (s.status === 'processing' ? 'Processing' : 'Pending');
+        }
         status.className = 'status ' + statusClass;
         status.textContent = statusText;
 
@@ -221,6 +284,11 @@ playNextBtn.addEventListener('click', async () => {
 
     // Mark as played and get audio
     const playResp = await fetch('/admin/api/ceremony/play/' + data.id + '?session_id=' + currentSessionId, {method: 'POST'});
+    if (!playResp.ok) {
+        const err = await playResp.json().catch(() => ({}));
+        alert(err.detail || 'Could not play this student');
+        return;
+    }
     const playData = await playResp.json();
 
     // Show now playing
@@ -276,6 +344,70 @@ resetBtn.addEventListener('click', async () => {
     await loadStudents();
     nowPlaying.style.display = 'none';
     playNextBtn.disabled = false;
+});
+
+function describeImport(r) {
+    const lines = [
+        `Rows read: ${r.rows}`,
+        `Added to the roster: ${r.added}, updated: ${r.updated}`,
+        `Matched existing students: ${r.matched_existing}`,
+    ];
+    if (r.created_stubs.length > 0) {
+        lines.push(`Created ${r.created_stubs.length} student(s) with no form submission (no recording): ${r.created_stubs.slice(0, 10).join(', ')}${r.created_stubs.length > 10 ? ', ...' : ''}`);
+    }
+    if (r.duplicates.length > 0) {
+        lines.push(`Duplicate rows (the later row won): ${r.duplicates.map(d => `${d.row} repeats ${d.same_as_row}`).join('; ')}`);
+    }
+    if (r.rejected.length > 0) {
+        lines.push(`Skipped ${r.rejected.length} row(s):`);
+        for (const x of r.rejected.slice(0, 10)) lines.push(`  row ${x.row}: ${x.reason}`);
+        if (r.rejected.length > 10) lines.push(`  and ${r.rejected.length - 10} more`);
+    }
+    return lines.join('\n');
+}
+
+importBtn.addEventListener('click', () => {
+    if (currentSessionId) rosterFile.click();
+});
+
+rosterFile.addEventListener('change', async () => {
+    const file = rosterFile.files[0];
+    rosterFile.value = '';
+    if (!file || !currentSessionId) return;
+
+    importBtn.disabled = true;
+    importBtn.textContent = 'Importing...';
+    try {
+        const body = new FormData();
+        body.append('file', file);
+        const resp = await fetch(`/admin/api/sessions/${currentSessionId}/roster/import`, {method: 'POST', body});
+        const data = await resp.json();
+        if (!resp.ok) {
+            alert('Import failed: ' + (data.detail || 'Unknown error'));
+        } else {
+            alert(describeImport(data));
+            await loadStudents();
+        }
+    } catch (e) {
+        alert('Import error: ' + e.message);
+    }
+    importBtn.textContent = 'Import roster';
+    importBtn.disabled = false;
+});
+
+generateBtn.addEventListener('click', async () => {
+    if (!currentSessionId) return;
+    generateBtn.disabled = true;
+    try {
+        const resp = await fetch(`/admin/api/sessions/${currentSessionId}/announcements/generate`, {method: 'POST'});
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            alert('Could not start generation: ' + (err.detail || 'Unknown error'));
+        }
+    } catch (e) {
+        alert('Generate error: ' + e.message);
+    }
+    await refreshAnnounceStatus();
 });
 
 init();

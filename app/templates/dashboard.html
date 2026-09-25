@@ -25,6 +25,12 @@
                 </select>
             </div>
             <div class="controls-right">
+                <span id="roster-tools" class="roster-tools" hidden>
+                    <span id="announce-status" class="announce-status"></span>
+                    <button id="import-btn" class="btn btn-small">Import roster</button>
+                    <button id="generate-btn" class="btn btn-small">Generate announcements</button>
+                    <input type="file" id="roster-file" accept=".csv,text/csv" hidden>
+                </span>
                 <button id="sync-btn" class="btn btn-small">Sync Forms</button>
                 <button id="play-next-btn" class="btn btn-primary" disabled>Play Next</button>
                 <button id="reset-btn" class="btn btn-small">Reset</button>
