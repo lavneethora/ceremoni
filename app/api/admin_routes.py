@@ -1,16 +1,49 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth import get_login_url, handle_callback, require_admin
 from app.db import get_session
 from app.models import (
-    Student, Recording, GraduationEvent, SessionCollege,
+    Student, Recording, GraduationEvent,
 )
+from app.services.config_loader import get_session_options
+from app.services.session_queue import load_session_rows, reset_played, set_played
 
 router = APIRouter(prefix="/admin")
+
+
+def _student_payload(row) -> dict:
+    student = row.student
+    recordings = student.recordings
+    return {
+        "id": student.id,
+        "typed_name": student.typed_name,
+        "college": student.college,
+        "major": row.major,
+        "degree_level": student.degree_level,
+        "played": row.played,
+        "sort_order": student.sort_order,
+        "seat_position": row.seat_position,
+        "honors_level": row.honors_level,
+        "status": recordings[0].processing_status if recordings else "no_recording",
+        "has_audio": bool(recordings and recordings[0].generated_audio_url),
+    }
+
+
+def _queue_payload(row) -> dict:
+    student = row.student
+    return {
+        "id": student.id,
+        "typed_name": student.typed_name,
+        "college": student.college,
+        "major": row.major,
+        "seat_position": row.seat_position,
+        "honors_level": row.honors_level,
+        "has_audio": bool(student.recordings and student.recordings[0].generated_audio_url),
+    }
 
 
 # --- Auth routes ---
@@ -56,7 +89,14 @@ async def list_events(
             "name": e.name,
             "active": e.active,
             "sessions": [
-                {"id": s.id, "label": s.label, "date": s.date, "time": s.time, "session_order": s.session_order}
+                {
+                    "id": s.id,
+                    "label": s.label,
+                    "date": s.date,
+                    "time": s.time,
+                    "session_order": s.session_order,
+                    **get_session_options(s.id),
+                }
                 for s in e.sessions
             ],
         }
@@ -83,44 +123,8 @@ async def list_students(
 ):
     require_admin(request)
 
-    query = select(Student).options(selectinload(Student.recordings))
-
-    if session_id:
-        # Get colleges for this session
-        result = await session.execute(
-            select(SessionCollege).where(SessionCollege.session_id == session_id).order_by(SessionCollege.college_order)
-        )
-        session_colleges = result.scalars().all()
-        college_names = [sc.college for sc in session_colleges]
-        college_order = {name: i for i, name in enumerate(college_names)}
-
-        query = query.where(Student.college.in_(college_names))
-
-    result = await session.execute(query)
-    students = result.scalars().all()
-
-    # Sort: college order -> major -> last name
-    def sort_key(s):
-        c_order = college_order.get(s.college, 999) if session_id else 0
-        last_name = s.typed_name.split()[-1] if s.typed_name else ""
-        return (s.sort_order or 99999, c_order, s.major or "", last_name)
-
-    students.sort(key=sort_key)
-
-    return [
-        {
-            "id": s.id,
-            "typed_name": s.typed_name,
-            "college": s.college,
-            "major": s.major,
-            "degree_level": s.degree_level,
-            "played": s.played,
-            "sort_order": s.sort_order,
-            "status": s.recordings[0].processing_status if s.recordings else "no_recording",
-            "has_audio": bool(s.recordings and s.recordings[0].generated_audio_url),
-        }
-        for s in students
-    ]
+    loaded = await load_session_rows(session, session_id)
+    return [_student_payload(row) for row in loaded.rows]
 
 
 @router.patch("/api/students/reorder")
@@ -165,37 +169,11 @@ async def next_student(
 ):
     require_admin(request)
 
-    result = await session.execute(
-        select(SessionCollege).where(SessionCollege.session_id == session_id).order_by(SessionCollege.college_order)
-    )
-    college_names = [sc.college for sc in result.scalars().all()]
-    college_order = {name: i for i, name in enumerate(college_names)}
-
-    result = await session.execute(
-        select(Student)
-        .options(selectinload(Student.recordings))
-        .where(Student.college.in_(college_names), Student.played.is_(False))
-    )
-    students = result.scalars().all()
-
-    if not students:
+    queue = (await load_session_rows(session, session_id)).queue()
+    if not queue:
         return {"done": True}
 
-    def sort_key(s):
-        c_order = college_order.get(s.college, 999)
-        last_name = s.typed_name.split()[-1] if s.typed_name else ""
-        return (s.sort_order or 99999, c_order, s.major or "", last_name)
-
-    students.sort(key=sort_key)
-    next_student = students[0]
-
-    return {
-        "id": next_student.id,
-        "typed_name": next_student.typed_name,
-        "college": next_student.college,
-        "major": next_student.major,
-        "has_audio": bool(next_student.recordings and next_student.recordings[0].generated_audio_url),
-    }
+    return _queue_payload(queue[0])
 
 
 @router.get("/api/ceremony/upcoming")
@@ -213,38 +191,11 @@ async def upcoming_students(
     if limit > 50:
         limit = 50
 
-    result = await session.execute(
-        select(SessionCollege).where(SessionCollege.session_id == session_id).order_by(SessionCollege.college_order)
-    )
-    college_names = [sc.college for sc in result.scalars().all()]
-    college_order = {name: i for i, name in enumerate(college_names)}
-
-    result = await session.execute(
-        select(Student)
-        .options(selectinload(Student.recordings))
-        .where(Student.college.in_(college_names), Student.played.is_(False))
-    )
-    students = result.scalars().all()
-
-    def sort_key(s):
-        c_order = college_order.get(s.college, 999)
-        last_name = s.typed_name.split()[-1] if s.typed_name else ""
-        return (s.sort_order or 99999, c_order, s.major or "", last_name)
-
-    students.sort(key=sort_key)
+    queue = (await load_session_rows(session, session_id)).queue()
 
     return {
-        "queue": [
-            {
-                "id": s.id,
-                "typed_name": s.typed_name,
-                "college": s.college,
-                "major": s.major,
-                "has_audio": bool(s.recordings and s.recordings[0].generated_audio_url),
-            }
-            for s in students[:limit]
-        ],
-        "total_remaining": len(students),
+        "queue": [_queue_payload(row) for row in queue[:limit]],
+        "total_remaining": len(queue),
     }
 
 
@@ -252,15 +203,14 @@ async def upcoming_students(
 async def play_student(
     student_id: str,
     request: Request,
+    session_id: str | None = None,
     session: AsyncSession = Depends(get_session),
 ):
     require_admin(request)
-    student = await session.get(Student, student_id)
-    if not student:
-        raise HTTPException(404, "Student not found")
-
-    student.played = True
-    await session.commit()
+    try:
+        student = await set_played(session, session_id, student_id, True)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
 
     result = await session.execute(
         select(Recording).where(Recording.student_id == student_id, Recording.generated_audio_url.isnot(None))
@@ -278,17 +228,16 @@ async def play_student(
 async def unplay_student(
     student_id: str,
     request: Request,
+    session_id: str | None = None,
     session: AsyncSession = Depends(get_session),
 ):
     require_admin(request)
-    student = await session.get(Student, student_id)
-    if not student:
-        raise HTTPException(404, "Student not found")
+    try:
+        student = await set_played(session, session_id, student_id, False)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
 
-    student.played = False
-    await session.commit()
-
-    return {"id": student.id, "typed_name": student.typed_name, "played": student.played}
+    return {"id": student.id, "typed_name": student.typed_name, "played": False}
 
 
 @router.post("/api/ceremony/reset")
@@ -298,16 +247,7 @@ async def reset_ceremony(
     session: AsyncSession = Depends(get_session),
 ):
     require_admin(request)
-
-    result = await session.execute(
-        select(SessionCollege).where(SessionCollege.session_id == session_id)
-    )
-    college_names = [sc.college for sc in result.scalars().all()]
-
-    await session.execute(
-        update(Student).where(Student.college.in_(college_names)).values(played=False)
-    )
-    await session.commit()
+    await reset_played(session, session_id)
     return {"status": "reset"}
 
 

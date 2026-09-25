@@ -36,3 +36,15 @@ events:
           - School of Professional Studies
           - College of Media & Communication
           - Davis College of Agricultural Sciences & Natural Resources
+
+  # Session options:
+  #   roster: true    students come from an imported roster, not from colleges
+  #   order: seating  announce only seated students, in seat order
+  - name: Fall 2026
+    active: false
+    sessions:
+      - label: "Honors Medallion"
+        date: "TBD"
+        time: "TBD"
+        roster: true
+        order: seating

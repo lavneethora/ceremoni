@@ -4,6 +4,8 @@ let currentStudent = null;
 let isPlaying = false;
 let history = []; // stack of student objects played this session (this browser tab)
 
+const HONORS_LABELS = {honors: 'With honors', highest_honors: 'With highest honors'};
+
 const sessionSelect = document.getElementById('session-select');
 const stage = document.getElementById('reader-stage');
 const empty = document.getElementById('reader-empty');
@@ -62,7 +64,7 @@ function render() {
 
     currentStudent = queue[0];
     currentName.textContent = currentStudent.typed_name;
-    const parts = [currentStudent.college, currentStudent.major].filter(Boolean);
+    const parts = [currentStudent.college, currentStudent.major, HONORS_LABELS[currentStudent.honors_level]].filter(Boolean);
     currentMeta.textContent = parts.join(' — ');
 
     upcomingList.replaceChildren();
@@ -95,7 +97,7 @@ async function playNext() {
     backBtn.disabled = true;
     const student = currentStudent;
     try {
-        const resp = await fetch('/admin/api/ceremony/play/' + student.id, {method: 'POST'});
+        const resp = await fetch('/admin/api/ceremony/play/' + student.id + '?session_id=' + currentSessionId, {method: 'POST'});
         const data = await resp.json();
         history.push(student);
         if (data.audio_url) {
@@ -134,7 +136,7 @@ async function goBack() {
     backBtn.disabled = true;
     const student = history.pop();
     try {
-        await fetch('/admin/api/ceremony/unplay/' + student.id, {method: 'POST'});
+        await fetch('/admin/api/ceremony/unplay/' + student.id + '?session_id=' + currentSessionId, {method: 'POST'});
     } catch (e) {
         console.error('unplay failed', e);
         history.push(student); // put it back so the user can retry
