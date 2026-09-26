@@ -9,7 +9,7 @@ secret with a label, so it is never the same key that signs login cookies.
 import hashlib
 import hmac
 
-from itsdangerous import BadSignature, URLSafeTimedSerializer
+from itsdangerous import BadData, URLSafeTimedSerializer
 
 from app.config import settings
 
@@ -51,6 +51,6 @@ def read_confirm_token(token: str) -> dict | None:
     """The payload if the token is genuine and recent, otherwise None."""
     try:
         data = _confirm_serializer().loads(token, max_age=CONFIRM_MAX_AGE_SECONDS)
-    except BadSignature:
+    except BadData:
         return None
     return data if isinstance(data, dict) else None
