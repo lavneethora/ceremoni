@@ -3,6 +3,7 @@ let students = [];
 let pollTimer = null;
 let toastTimer = null;
 let busy = false;
+let loadSeq = 0;
 
 const HONORS_LABELS = {honors: 'Honors', highest_honors: 'Highest honors'};
 
@@ -64,9 +65,11 @@ async function loadState() {
     clearTimeout(pollTimer);
     const sessionId = currentSessionId;
     if (!sessionId) return;
+    // A poll that started before a seat change must not overwrite the newer list
+    const seq = ++loadSeq;
     try {
         const resp = await fetch(`/admin/api/sessions/${sessionId}/seating`);
-        if (sessionId !== currentSessionId) return;
+        if (sessionId !== currentSessionId || seq !== loadSeq) return;
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
             showToast(err.detail || 'Could not load the seating', true);
