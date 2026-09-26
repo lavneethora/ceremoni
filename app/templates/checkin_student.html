@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>Ceremoni Check-in</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/checkin_student.css">
+</head>
+<body>
+    <main class="student-card">
+        <div class="student-brand">ceremoni</div>
+
+        {% if state == "confirm" %}
+            <div class="student-label">Is this you?</div>
+            <div class="student-name">{{ student.typed_name }}</div>
+            <div class="student-meta">
+                {{ entry.major or student.major or "" }}{% if entry.honors_level %}{% if entry.major or student.major %} · {% endif %}{{ "Highest honors" if entry.honors_level == "highest_honors" else "Honors" }}{% endif %}
+            </div>
+            <form method="post" action="/checkin/confirm">
+                <input type="hidden" name="c" value="{{ token }}">
+                <button type="submit" class="student-button">Yes, add me to the line</button>
+            </form>
+            <p class="student-note">If this is not you, close this page and see an usher.</p>
+
+        {% elif state == "done" %}
+            <div class="student-label">You are checked in</div>
+            <div class="student-number">{{ entry.seat_position }}</div>
+            <div class="student-name">{{ student.typed_name }}</div>
+            <p class="student-note">You will be announced in this order. Please stay in your place.</p>
+
+        {% else %}
+            <p class="student-message">{{ message }}</p>
+        {% endif %}
+    </main>
+</body>
+</html>
