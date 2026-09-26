@@ -85,6 +85,10 @@ async def start_line_checkin(
     return RedirectResponse(url)
 
 
+def student_signin_failed(request: Request):
+    return _page(request, "message", "Sign-in did not complete. Please scan the code and try again.", status_code=400)
+
+
 async def complete_student_signin(request: Request, record: dict, identity: dict):
     """Called by the Microsoft callback once a student has signed in."""
     session_id = record["intent"].get("session_id", "")
