@@ -1,0 +1,178 @@
+/* Usher check-in: phone and tablet friendly, large tap targets */
+
+.checkin-tag {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b6b6b;
+    padding: 2px 8px;
+    border: 1px solid #e5e5e5;
+    margin-left: 8px;
+}
+
+.checkin-main {
+    padding: 0 32px 48px;
+}
+
+.checkin-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 0;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.checkin-summary {
+    color: #6b6b6b;
+    font-size: 13px;
+}
+
+.checkin-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    padding-top: 16px;
+}
+
+.checkin-columns[hidden] {
+    display: none;
+}
+
+.checkin-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.checkin-panel-head h2 {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b6b6b;
+}
+
+.checkin-panel-head input[type="search"] {
+    flex: 1;
+    min-width: 160px;
+    max-width: 280px;
+    padding: 8px 12px;
+    font-family: inherit;
+    font-size: 14px;
+    border: 1px solid #e5e5e5;
+    background: #fff;
+    color: #1a1a1a;
+}
+
+.checkin-panel-head input[type="search"]:focus {
+    outline: none;
+    border-color: #1a1a1a;
+}
+
+.checkin-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.checkin-row:hover {
+    background: #fafafa;
+}
+
+.checkin-row .seat-number {
+    width: 36px;
+    flex-shrink: 0;
+    color: #1a1a1a;
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.checkin-row .who {
+    flex: 1;
+    min-width: 0;
+}
+
+.checkin-row .who-name {
+    font-weight: 500;
+    font-size: 15px;
+    overflow-wrap: anywhere;
+}
+
+.checkin-row .who-meta {
+    color: #6b6b6b;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.checkin-row.announced {
+    opacity: 0.4;
+}
+
+.checkin-row .honors-tag {
+    padding: 2px 8px;
+    color: #4a90d9;
+    border: 1px solid #4a90d9;
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.checkin-row .btn {
+    min-height: 40px;
+    min-width: 72px;
+    justify-content: center;
+}
+
+.checkin-empty-list {
+    padding: 32px 0;
+    text-align: center;
+    color: #6b6b6b;
+    font-size: 13px;
+}
+
+.checkin-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 32px);
+    padding: 10px 16px;
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 13px;
+}
+
+.checkin-toast[hidden] {
+    display: none;
+}
+
+.checkin-toast.error {
+    background: #fff;
+    color: #b42318;
+    border: 1px solid #b42318;
+}
+
+@media (max-width: 800px) {
+    .checkin-main {
+        padding: 0 16px 48px;
+    }
+
+    .checkin-columns {
+        grid-template-columns: 1fr;
+        gap: 24px;
+    }
+
+    .checkin-panel-head input[type="search"] {
+        max-width: none;
+    }
+}
