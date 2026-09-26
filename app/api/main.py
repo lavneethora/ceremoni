@@ -10,6 +10,7 @@ from app.config import settings
 from app.db import init_db
 from app.api.routes import router
 from app.api.admin_routes import router as admin_router
+from app.api.checkin_public import router as checkin_router
 from app.auth import require_admin
 
 
@@ -40,6 +41,7 @@ app.add_middleware(SessionMiddleware, secret_key=_session_secret)
 
 app.include_router(router)
 app.include_router(admin_router)
+app.include_router(checkin_router)
 
 # Static files and templates
 static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
