@@ -63,6 +63,12 @@ async def reader(request: Request):
     return templates.TemplateResponse(request, "reader.html", {"user": user})
 
 
+@app.get("/admin/checkin")
+async def checkin(request: Request):
+    user = require_admin(request)
+    return templates.TemplateResponse(request, "checkin.html", {"user": user})
+
+
 @app.get("/")
 async def root():
     from fastapi.responses import RedirectResponse
