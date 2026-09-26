@@ -4,7 +4,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth import get_login_url, handle_callback, require_admin
+from app.api.checkin_public import complete_student_signin, student_signin_failed
+from app.auth import (
+    MODE_STUDENT,
+    get_login_url,
+    handle_callback,
+    handle_student_callback,
+    require_admin,
+    take_flow,
+)
 from app.db import get_session
 from app.models import (
     Student, Recording, GraduationEvent,
@@ -16,6 +24,7 @@ from app.services.announcements import (
     get_ready_entry,
     start_generation,
 )
+from app.services.checkin_links import line_signature
 from app.services.config_loader import get_session_options
 from app.services.roster_import import RosterImportError, import_roster
 from app.services.seating import (
@@ -84,8 +93,24 @@ async def login(request: Request):
 
 @router.get("/auth/callback", name="auth_callback")
 async def auth_callback(request: Request):
-    state = request.session.get("auth_state", "")
-    user = await handle_callback(request, state)
+    """Microsoft sends both admins and students back here, so it is registered once in Azure."""
+    state = request.query_params.get("state", "")
+    record = take_flow(state)
+    if not record:
+        raise HTTPException(400, "Invalid or expired auth session. Please try logging in again.")
+
+    if record["mode"] == MODE_STUDENT:
+        # Students never get a cookie or an admin session, only a page with their own check-in
+        try:
+            identity = handle_student_callback(request, record)
+        except HTTPException:
+            return student_signin_failed(request)
+        return await complete_student_signin(request, record, identity)
+
+    # An admin login must finish in the browser that started it
+    if request.session.get("auth_state") != state:
+        raise HTTPException(400, "Invalid or expired auth session. Please try logging in again.")
+    user = await handle_callback(request, record)
     request.session["user"] = user
     request.session.pop("auth_state", None)
     return RedirectResponse("/admin/dashboard")
@@ -364,6 +389,15 @@ async def seating_state(
         "checkin_open": await is_checkin_open(session, session_id),
         "students": [_student_payload(row, loaded.mode.roster) for row in loaded.rows],
     }
+
+
+@router.get("/api/sessions/{session_id}/checkin/links")
+async def checkin_links(session_id: str, request: Request):
+    """The addresses to put in QR codes for this session."""
+    require_admin(request)
+    _require_seating_session(session_id)
+    line_url = str(request.url_for("start_line_checkin", session_id=session_id))
+    return {"line_url": f"{line_url}?k={line_signature(session_id)}"}
 
 
 @router.post("/api/sessions/{session_id}/seating/{student_id}")
