@@ -18,6 +18,15 @@ from app.services.announcements import (
 )
 from app.services.config_loader import get_session_options
 from app.services.roster_import import RosterImportError, import_roster
+from app.services.seating import (
+    SeatingConflict,
+    clear_seating,
+    is_checkin_open,
+    reorder_seating,
+    seat_student,
+    set_checkin_open,
+    unseat_student,
+)
 from app.services.session_queue import get_session_mode, load_session_rows, reset_played, set_played
 
 router = APIRouter(prefix="/admin")
@@ -331,6 +340,115 @@ async def session_announcement_status(
     require_admin(request)
     _require_roster_session(session_id)
     return await announcement_status(session, session_id)
+
+
+# --- Seating: usher check-in ---
+
+def _require_seating_session(session_id: str) -> None:
+    if not get_session_mode(session_id).seating:
+        raise HTTPException(400, "This session does not use seating order")
+
+
+@router.get("/api/sessions/{session_id}/seating")
+async def seating_state(
+    session_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Everyone in the session with their seat (or none), plus whether student check-in is open."""
+    require_admin(request)
+    _require_seating_session(session_id)
+
+    loaded = await load_session_rows(session, session_id)
+    return {
+        "checkin_open": await is_checkin_open(session, session_id),
+        "students": [_student_payload(row, loaded.mode.roster) for row in loaded.rows],
+    }
+
+
+@router.post("/api/sessions/{session_id}/seating/{student_id}")
+async def seat_one_student(
+    session_id: str,
+    student_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Seat a student at the end of the line. Seating someone already seated changes nothing."""
+    require_admin(request)
+    _require_seating_session(session_id)
+    try:
+        entry, newly_seated = await seat_student(session, session_id, student_id)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except SeatingConflict as e:
+        raise HTTPException(409, str(e))
+    return {"seat_position": entry.seat_position, "newly_seated": newly_seated}
+
+
+@router.delete("/api/sessions/{session_id}/seating/{student_id}")
+async def unseat_one_student(
+    session_id: str,
+    student_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    require_admin(request)
+    _require_seating_session(session_id)
+    try:
+        await unseat_student(session, session_id, student_id)
+    except SeatingConflict as e:
+        raise HTTPException(409, str(e))
+    return {"status": "ok"}
+
+
+@router.put("/api/sessions/{session_id}/seating/order")
+async def reorder_session_seating(
+    session_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Body: {"order": [student ids]}, exactly the seated students in their new order."""
+    require_admin(request)
+    _require_seating_session(session_id)
+    body = await request.json()
+    order = body.get("order") if isinstance(body, dict) else None
+    if not isinstance(order, list) or not all(isinstance(i, str) for i in order):
+        raise HTTPException(400, "Expected a list of student ids in 'order'")
+    try:
+        await reorder_seating(session, session_id, order)
+    except SeatingConflict as e:
+        raise HTTPException(409, str(e))
+    return {"status": "ok"}
+
+
+@router.delete("/api/sessions/{session_id}/seating")
+async def clear_session_seating(
+    session_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Remove every seat and reset played state for the session."""
+    require_admin(request)
+    _require_seating_session(session_id)
+    await clear_seating(session, session_id)
+    return {"status": "ok"}
+
+
+@router.put("/api/sessions/{session_id}/checkin")
+async def set_session_checkin(
+    session_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Body: {"open": true or false}. Controls whether students can check themselves in."""
+    require_admin(request)
+    _require_seating_session(session_id)
+    body = await request.json()
+    open_ = body.get("open") if isinstance(body, dict) else None
+    if not isinstance(open_, bool):
+        raise HTTPException(400, "Expected true or false in 'open'")
+    await set_checkin_open(session, session_id, open_)
+    return {"checkin_open": open_}
 
 
 # --- Debug: raw Excel data ---

@@ -134,6 +134,7 @@ function renderStudents() {
     let currentCollege = '';
     let sawSeated = false;
     let sawUnseated = false;
+    let seatedBox = null; // its own container so dragging cannot cross into the unseated rows
 
     for (const s of students) {
         const unseated = seating && s.seat_position === null;
@@ -142,6 +143,8 @@ function renderStudents() {
             if (!unseated && !sawSeated) {
                 sawSeated = true;
                 studentList.appendChild(createHeader('Seating order'));
+                seatedBox = document.createElement('div');
+                studentList.appendChild(seatedBox);
             } else if (unseated && !sawUnseated) {
                 sawUnseated = true;
                 studentList.appendChild(createHeader('Not yet seated'));
@@ -160,6 +163,12 @@ function renderStudents() {
         if (seating) {
             lead.className = 'seat-number';
             lead.textContent = unseated ? '' : String(s.seat_position);
+            if (!unseated) {
+                const grip = document.createElement('span');
+                grip.className = 'drag-handle';
+                grip.textContent = '::';
+                row.appendChild(grip);
+            }
         } else {
             lead.className = 'drag-handle';
             lead.textContent = '::';
@@ -236,11 +245,19 @@ function renderStudents() {
         }
         row.appendChild(reprocessBtn);
         row.appendChild(status);
-        studentList.appendChild(row);
+        (seating && !unseated ? seatedBox : studentList).appendChild(row);
     }
 
-    // Drag reorder writes the global sort order, so it is only for college based sessions
-    if (!seating) {
+    if (seating) {
+        // Seated students are reordered within the session, never through the global sort order
+        if (seatedBox) {
+            sortableInstance = new Sortable(seatedBox, {
+                handle: '.drag-handle',
+                ghostClass: 'sortable-ghost',
+                onEnd: saveSeatingOrder,
+            });
+        }
+    } else {
         sortableInstance = new Sortable(studentList, {
             handle: '.drag-handle',
             ghostClass: 'sortable-ghost',
@@ -248,6 +265,22 @@ function renderStudents() {
             onEnd: saveOrder,
         });
     }
+}
+
+async function saveSeatingOrder() {
+    const sessionId = currentSessionId;
+    const order = Array.from(studentList.querySelectorAll('.student-row.seating:not(.unseated)'))
+        .map(row => row.dataset.id);
+    const resp = await fetch(`/admin/api/sessions/${sessionId}/seating/order`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({order}),
+    });
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        alert('Could not save the order: ' + (err.detail || 'Unknown error'));
+    }
+    if (sessionId === currentSessionId) await loadStudents();
 }
 
 async function saveOrder() {

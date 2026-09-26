@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ceremoni Check-in</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/checkin.css">
+</head>
+<body>
+    <header>
+        <h1>ceremoni <span class="checkin-tag">check-in</span></h1>
+        <div class="header-right">
+            <span class="user-name">{{ user.name }}</span>
+            <a href="/admin/dashboard" class="btn btn-small">Dashboard</a>
+            <a href="/admin/logout" class="btn btn-small">Logout</a>
+        </div>
+    </header>
+
+    <main class="checkin-main">
+        <div class="checkin-controls">
+            <select id="session-select">
+                <option value="">Select session</option>
+            </select>
+            <span id="checkin-summary" class="checkin-summary"></span>
+        </div>
+
+        <div class="empty-state" id="checkin-empty">Pick a session to start seating students.</div>
+
+        <div class="checkin-columns" id="checkin-columns" hidden>
+            <section class="checkin-panel">
+                <div class="checkin-panel-head">
+                    <h2>Waiting</h2>
+                    <input type="search" id="checkin-search" placeholder="Search by name" autocomplete="off">
+                </div>
+                <div class="checkin-list" id="waiting-list"></div>
+            </section>
+
+            <section class="checkin-panel">
+                <div class="checkin-panel-head">
+                    <h2>Seated, in announcing order</h2>
+                    <button id="clear-btn" class="btn btn-small" type="button">Clear seating</button>
+                </div>
+                <div class="checkin-list" id="seated-list"></div>
+            </section>
+        </div>
+
+        <div class="checkin-toast" id="checkin-toast" hidden></div>
+    </main>
+
+    <script src="/static/checkin.js"></script>
+</body>
+</html>
