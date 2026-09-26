@@ -175,4 +175,8 @@
     .checkin-panel-head input[type="search"] {
         max-width: none;
     }
+
+    header .user-name {
+        display: none;
+    }
 }
