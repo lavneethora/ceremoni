@@ -4,13 +4,23 @@ let pollTimer = null;
 let toastTimer = null;
 let busy = false;
 let loadSeq = 0;
+let checkinOpen = false;
+let qrSessionId = null;
 
 const HONORS_LABELS = {honors: 'Honors', highest_honors: 'Highest honors'};
 
 const sessionSelect = document.getElementById('session-select');
 const summary = document.getElementById('checkin-summary');
 const emptyState = document.getElementById('checkin-empty');
-const columns = document.getElementById('checkin-columns');
+const body = document.getElementById('checkin-body');
+const tapPanel = document.getElementById('tab-tap');
+const linePanel = document.getElementById('tab-line');
+const tabButtons = document.querySelectorAll('.checkin-tab');
+const switchBox = document.querySelector('.checkin-switch');
+const switchLabel = document.getElementById('checkin-switch-label');
+const switchBtn = document.getElementById('checkin-switch-btn');
+const lineQr = document.getElementById('line-qr');
+const lineUrl = document.getElementById('line-url');
 const searchInput = document.getElementById('checkin-search');
 const waitingList = document.getElementById('waiting-list');
 const seatedList = document.getElementById('seated-list');
@@ -51,14 +61,16 @@ async function selectSession() {
     currentSessionId = sessionSelect.value;
     clearTimeout(pollTimer);
     students = [];
+    qrSessionId = null;
     searchInput.value = '';
     if (!currentSessionId) {
-        columns.hidden = true;
+        body.hidden = true;
         emptyState.hidden = false;
         summary.textContent = '';
         return;
     }
     await loadState();
+    if (!linePanel.hidden) showLineQr();
 }
 
 async function loadState() {
@@ -74,7 +86,9 @@ async function loadState() {
             const err = await resp.json().catch(() => ({}));
             showToast(err.detail || 'Could not load the seating', true);
         } else {
-            students = (await resp.json()).students;
+            const data = await resp.json();
+            students = data.students;
+            checkinOpen = data.checkin_open;
             render();
         }
     } catch (e) {
@@ -138,7 +152,7 @@ function render() {
         .sort((a, b) => lastName(a.typed_name).localeCompare(lastName(b.typed_name)) || a.typed_name.localeCompare(b.typed_name));
 
     emptyState.hidden = true;
-    columns.hidden = false;
+    body.hidden = false;
     summary.textContent = `${seated.length} seated, ${waiting.length} waiting`;
 
     const query = searchInput.value.trim().toLowerCase();
@@ -161,6 +175,7 @@ function render() {
     for (const s of seated) seatedList.appendChild(makeRow(s, true));
 
     clearBtn.disabled = seated.length === 0;
+    renderSwitch();
 }
 
 function emptyMessage(text) {
@@ -228,6 +243,64 @@ clearBtn.addEventListener('click', async () => {
     busy = false;
     await loadState();
 });
+
+function renderSwitch() {
+    switchBox.classList.toggle('open', checkinOpen);
+    switchLabel.textContent = checkinOpen
+        ? 'Student check-in is open. Students can scan now.'
+        : 'Student check-in is closed. Scans are refused.';
+    switchBtn.textContent = checkinOpen ? 'Close check-in' : 'Open check-in';
+}
+
+switchBtn.addEventListener('click', async () => {
+    if (!currentSessionId || busy) return;
+    busy = true;
+    switchBtn.disabled = true;
+    try {
+        const resp = await fetch(`/admin/api/sessions/${currentSessionId}/checkin`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({open: !checkinOpen}),
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            showToast(err.detail || 'Could not change check-in', true);
+        }
+    } catch (e) {
+        showToast('Connection problem, try again', true);
+    }
+    busy = false;
+    switchBtn.disabled = false;
+    await loadState();
+});
+
+// The QR is drawn in the browser from a signed link the server made for this session
+async function showLineQr() {
+    const sessionId = currentSessionId;
+    if (!sessionId || qrSessionId === sessionId) return;
+    const resp = await fetch(`/admin/api/sessions/${sessionId}/checkin/links`);
+    if (!resp.ok || sessionId !== currentSessionId) return;
+    const {line_url} = await resp.json();
+
+    const qr = qrcode(0, 'M');
+    qr.addData(line_url);
+    qr.make();
+    const svg = new DOMParser().parseFromString(qr.createSvgTag({scalable: true, margin: 2}), 'image/svg+xml');
+    lineQr.replaceChildren(svg.documentElement);
+    lineUrl.textContent = line_url;
+    lineUrl.href = line_url;
+    qrSessionId = sessionId;
+}
+
+for (const tab of tabButtons) {
+    tab.addEventListener('click', () => {
+        for (const t of tabButtons) t.classList.toggle('active', t === tab);
+        const line = tab.dataset.tab === 'line';
+        tapPanel.hidden = line;
+        linePanel.hidden = !line;
+        if (line) showLineQr();
+    });
+}
 
 searchInput.addEventListener('input', render);
 sessionSelect.addEventListener('change', selectSession);
