@@ -20,8 +20,14 @@ from app.services.checkin_links import (
     line_signature_ok,
     make_confirm_token,
     read_confirm_token,
+    seat_signature_ok,
 )
-from app.services.seating import SeatingConflict, is_checkin_open, seat_student
+from app.services.seating import (
+    SeatingConflict,
+    is_checkin_open,
+    seat_student,
+    seat_student_at,
+)
 from app.services.session_queue import get_session_mode
 
 router = APIRouter(prefix="/checkin")
@@ -85,13 +91,37 @@ async def start_line_checkin(
     return RedirectResponse(url)
 
 
+@router.get("/seat/{session_id}/{seat_position}")
+async def start_seat_checkin(
+    session_id: str,
+    seat_position: int,
+    request: Request,
+    k: str = "",
+    db: AsyncSession = Depends(get_session),
+):
+    """Where a seat's QR code points. Signed per seat, so one seat's code cannot seat someone else."""
+    if seat_position < 1 or not seat_signature_ok(session_id, seat_position, k):
+        return _page(request, "message", "This code is not valid. Please see an usher.", status_code=400)
+    _require_seating(session_id)
+    if not await is_checkin_open(db, session_id):
+        return _page(request, "message", "Check-in is not open yet. Please wait for an usher to open it.")
+
+    url, _state = get_login_url(
+        str(request.url_for("auth_callback")),
+        mode=MODE_STUDENT,
+        intent={"session_id": session_id, "method": "seat", "seat_position": seat_position},
+    )
+    return RedirectResponse(url)
+
+
 def student_signin_failed(request: Request):
     return _page(request, "message", "Sign-in did not complete. Please scan the code and try again.", status_code=400)
 
 
 async def complete_student_signin(request: Request, record: dict, identity: dict):
     """Called by the Microsoft callback once a student has signed in."""
-    session_id = record["intent"].get("session_id", "")
+    intent = record["intent"]
+    session_id = intent.get("session_id", "")
     async with async_session() as db:
         student = await _find_roster_student(db, session_id, identity["emails"])
     if student is None:
@@ -99,7 +129,10 @@ async def complete_student_signin(request: Request, record: dict, identity: dict
             request, "message",
             f"We could not match {identity['name'] or 'this account'} to the honors list. {SEE_AN_USHER}",
         )
-    token = make_confirm_token({"sid": session_id, "stu": student.id, "m": record["intent"].get("method", "line")})
+    payload = {"sid": session_id, "stu": student.id, "m": intent.get("method", "line")}
+    if intent.get("seat_position") is not None:
+        payload["seat"] = intent["seat_position"]
+    token = make_confirm_token(payload)
     return RedirectResponse(f"/checkin/confirm?c={token}", status_code=303)
 
 
@@ -119,17 +152,40 @@ async def _load_confirm(db: AsyncSession, token: str):
 EXPIRED = "This link has expired. Please scan the code again."
 
 
+def _target_seat(data: dict) -> int | None:
+    return data.get("seat")
+
+
 @router.get("/confirm")
 async def confirm_page(request: Request, c: str = "", db: AsyncSession = Depends(get_session)):
     loaded = await _load_confirm(db, c)
     if not loaded:
         return _page(request, "message", EXPIRED, status_code=400)
-    _data, student, entry = loaded
+    data, student, entry = loaded
+    target = _target_seat(data)
+
     if entry.seat_position is not None:
+        if target is not None and entry.seat_position != target:
+            return _page(
+                request, "message",
+                f"You are already checked in at seat {entry.seat_position}. {SEE_AN_USHER}",
+            )
         return _page(request, "done", student=student, entry=entry)
     if not await is_checkin_open(db, entry.session_id):
         return _page(request, "message", "Check-in is closed right now. " + SEE_AN_USHER)
+    if target is not None and await _seat_taken_by_other(db, entry.session_id, target, student.id):
+        return _page(request, "message", f"Seat {target} is already taken. {SEE_AN_USHER}", status_code=409)
     return _page(request, "confirm", student=student, entry=entry, token=c)
+
+
+async def _seat_taken_by_other(db: AsyncSession, session_id: str, seat_position: int, student_id: str) -> bool:
+    result = await db.execute(
+        select(SessionEntry.student_id).where(
+            SessionEntry.session_id == session_id, SessionEntry.seat_position == seat_position
+        )
+    )
+    holder = result.scalar_one_or_none()
+    return holder is not None and holder != student_id
 
 
 @router.post("/confirm")
@@ -138,13 +194,24 @@ async def confirm_checkin(request: Request, c: str = Form(""), db: AsyncSession 
     loaded = await _load_confirm(db, c)
     if not loaded:
         return _page(request, "message", EXPIRED, status_code=400)
-    _data, student, entry = loaded
+    data, student, entry = loaded
+    target = _target_seat(data)
 
     if entry.seat_position is None:
         if not await is_checkin_open(db, entry.session_id):
             return _page(request, "message", "Check-in is closed right now. " + SEE_AN_USHER)
         try:
-            entry, _new = await seat_student(db, entry.session_id, student.id)
-        except (SeatingConflict, LookupError):
+            if target is not None:
+                entry, _new = await seat_student_at(db, entry.session_id, student.id, target)
+            else:
+                entry, _new = await seat_student(db, entry.session_id, student.id)
+        except SeatingConflict as e:
+            return _page(request, "message", f"{e} {SEE_AN_USHER}", status_code=409)
+        except LookupError:
             return _page(request, "message", "Something went wrong. " + SEE_AN_USHER, status_code=409)
+    elif target is not None and entry.seat_position != target:
+        return _page(
+            request, "message",
+            f"You are already checked in at seat {entry.seat_position}. {SEE_AN_USHER}",
+        )
     return _page(request, "done", student=student, entry=entry)
