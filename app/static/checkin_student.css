@@ -1,0 +1,75 @@
+/* Student check-in: one card, phone first */
+
+.student-card {
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 48px 24px;
+    text-align: center;
+}
+
+.student-brand {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+    margin-bottom: 48px;
+}
+
+.student-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b6b6b;
+    margin-bottom: 12px;
+}
+
+.student-name {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+
+.student-meta {
+    margin-top: 8px;
+    font-size: 14px;
+    color: #6b6b6b;
+}
+
+.student-number {
+    font-size: 88px;
+    font-weight: 700;
+    letter-spacing: -2px;
+    line-height: 1;
+    margin-bottom: 16px;
+    font-variant-numeric: tabular-nums;
+}
+
+.student-button {
+    display: block;
+    width: 100%;
+    margin-top: 32px;
+    padding: 18px 24px;
+    font-family: inherit;
+    font-size: 17px;
+    font-weight: 600;
+    color: #fff;
+    background: #1a1a1a;
+    border: 1px solid #1a1a1a;
+    cursor: pointer;
+}
+
+.student-button:hover {
+    background: #333;
+}
+
+.student-note {
+    margin-top: 20px;
+    font-size: 13px;
+    color: #6b6b6b;
+}
+
+.student-message {
+    font-size: 16px;
+    line-height: 1.5;
+}

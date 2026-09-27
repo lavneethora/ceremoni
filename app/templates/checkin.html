@@ -29,27 +29,51 @@
 
         <div class="empty-state" id="checkin-empty">Pick a session to start seating students.</div>
 
-        <div class="checkin-columns" id="checkin-columns" hidden>
-            <section class="checkin-panel">
-                <div class="checkin-panel-head">
-                    <h2>Waiting</h2>
-                    <input type="search" id="checkin-search" placeholder="Search by name" autocomplete="off">
-                </div>
-                <div class="checkin-list" id="waiting-list"></div>
-            </section>
+        <div id="checkin-body" hidden>
+            <nav class="checkin-tabs">
+                <button type="button" class="checkin-tab active" data-tab="tap">Tap names</button>
+                <button type="button" class="checkin-tab" data-tab="line">Line QR</button>
+            </nav>
 
-            <section class="checkin-panel">
-                <div class="checkin-panel-head">
-                    <h2>Seated, in announcing order</h2>
-                    <button id="clear-btn" class="btn btn-small" type="button">Clear seating</button>
+            <div class="checkin-columns" id="tab-tap">
+                <section class="checkin-panel">
+                    <div class="checkin-panel-head">
+                        <h2>Waiting</h2>
+                        <input type="search" id="checkin-search" placeholder="Search by name" autocomplete="off">
+                    </div>
+                    <div class="checkin-list" id="waiting-list"></div>
+                </section>
+
+                <section class="checkin-panel">
+                    <div class="checkin-panel-head">
+                        <h2>Seated, in announcing order</h2>
+                        <button id="clear-btn" class="btn btn-small" type="button">Clear seating</button>
+                    </div>
+                    <div class="checkin-list" id="seated-list"></div>
+                </section>
+            </div>
+
+            <section class="checkin-qr" id="tab-line" hidden>
+                <div class="checkin-switch">
+                    <span id="checkin-switch-label"></span>
+                    <button id="checkin-switch-btn" class="btn" type="button"></button>
                 </div>
-                <div class="checkin-list" id="seated-list"></div>
+                <p class="checkin-help">
+                    Post this code where students line up. Each student scans it, signs in with their TTU
+                    account and confirms. They are added to the announcing order in the order they confirm.
+                    Open check-in when the line forms and close it when the last student has arrived.
+                </p>
+                <div class="checkin-qr-code" id="line-qr"></div>
+                <a class="checkin-qr-link" id="line-url" href="#" target="_blank" rel="noopener"></a>
             </section>
         </div>
 
         <div class="checkin-toast" id="checkin-toast" hidden></div>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"
+            integrity="sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k"
+            crossorigin="anonymous"></script>
     <script src="/static/checkin.js"></script>
 </body>
 </html>

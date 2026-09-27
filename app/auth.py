@@ -1,3 +1,5 @@
+import time
+
 import msal
 from fastapi import Request, HTTPException
 
@@ -7,8 +9,14 @@ AUTHORITY = f"https://login.microsoftonline.com/{settings.ms_tenant_id}"
 SCOPES = ["User.Read", "Files.Read"]
 REDIRECT_PATH = "/auth/callback"
 
-# Store auth flows in memory (keyed by state param)
-# Cookie sessions are too small for MSAL's flow object
+MODE_ADMIN = "admin"
+MODE_STUDENT = "student"
+
+# Login flows in flight, keyed by the OAuth state parameter.
+# Cookie sessions are too small for MSAL's flow object, and phone camera apps
+# often drop cookies, so student sign-in finds its flow by state alone.
+FLOW_TTL_SECONDS = 600
+MAX_FLOWS = 500
 _auth_flows: dict[str, dict] = {}
 
 
@@ -20,21 +28,45 @@ def _get_msal_app():
     )
 
 
-def get_login_url(redirect_uri: str) -> str:
+def _drop_old_flows() -> None:
+    now = time.time()
+    for state in [s for s, rec in _auth_flows.items() if now - rec["created_at"] > FLOW_TTL_SECONDS]:
+        del _auth_flows[state]
+    # Dicts keep insertion order, so the oldest go first when the cap is hit
+    while len(_auth_flows) >= MAX_FLOWS:
+        del _auth_flows[next(iter(_auth_flows))]
+
+
+def get_login_url(redirect_uri: str, mode: str = MODE_ADMIN, intent: dict | None = None) -> tuple[str, str]:
+    """Start a Microsoft sign-in. Returns (url, state).
+
+    Admin sign-in asks for Graph access to read the Forms workbook. Student
+    sign-in asks for nothing beyond identity and always shows the account
+    picker, so a shared phone does not silently reuse someone else's account.
+    """
     app = _get_msal_app()
-    flow = app.initiate_auth_code_flow(SCOPES, redirect_uri=redirect_uri)
+    if mode == MODE_STUDENT:
+        flow = app.initiate_auth_code_flow([], redirect_uri=redirect_uri, prompt="select_account")
+    else:
+        flow = app.initiate_auth_code_flow(SCOPES, redirect_uri=redirect_uri)
     state = flow.get("state", "")
-    _auth_flows[state] = flow
+    _drop_old_flows()
+    _auth_flows[state] = {"flow": flow, "mode": mode, "intent": intent or {}, "created_at": time.time()}
     return flow.get("auth_uri", ""), state
 
 
-async def handle_callback(request: Request, state: str) -> dict:
-    flow = _auth_flows.pop(state, None)
-    if not flow:
-        raise HTTPException(400, "Invalid or expired auth session. Please try logging in again.")
+def take_flow(state: str) -> dict | None:
+    """Remove and return the login record for this state, or None if unknown or expired."""
+    record = _auth_flows.pop(state, None)
+    if record is None or time.time() - record["created_at"] > FLOW_TTL_SECONDS:
+        return None
+    return record
 
+
+async def handle_callback(request: Request, record: dict) -> dict:
+    """Finish an admin sign-in."""
     app = _get_msal_app()
-    result = app.acquire_token_by_auth_code_flow(flow, dict(request.query_params))
+    result = app.acquire_token_by_auth_code_flow(record["flow"], dict(request.query_params))
     if "access_token" not in result:
         raise HTTPException(403, f"Authentication failed: {result.get('error_description', 'Unknown error')}")
 
@@ -59,6 +91,26 @@ async def handle_callback(request: Request, state: str) -> dict:
         "name": user_info.get("displayName", ""),
         "access_token": result["access_token"],
     }
+
+
+def handle_student_callback(request: Request, record: dict) -> dict:
+    """Finish a student sign-in. Returns who they are and nothing else.
+
+    No Graph call is made and no token is kept: the signed identity claims are
+    all that is needed to look the student up on the roster.
+    """
+    app = _get_msal_app()
+    result = app.acquire_token_by_auth_code_flow(record["flow"], dict(request.query_params))
+    claims = result.get("id_token_claims")
+    if "error" in result or not claims:
+        raise HTTPException(403, "Sign-in did not complete. Please scan the code and try again.")
+
+    emails = []
+    for key in ("preferred_username", "email", "upn"):
+        value = claims.get(key)
+        if value and value.lower() not in emails:
+            emails.append(value.lower())
+    return {"emails": emails, "name": claims.get("name", "")}
 
 
 def require_admin(request: Request):
