@@ -33,6 +33,7 @@
             <nav class="checkin-tabs">
                 <button type="button" class="checkin-tab active" data-tab="tap">Tap names</button>
                 <button type="button" class="checkin-tab" data-tab="line">Line QR</button>
+                <button type="button" class="checkin-tab" data-tab="seat">Seat QR</button>
             </nav>
 
             <div class="checkin-columns" id="tab-tap">
@@ -65,6 +66,23 @@
                 </p>
                 <div class="checkin-qr-code" id="line-qr"></div>
                 <a class="checkin-qr-link" id="line-url" href="#" target="_blank" rel="noopener"></a>
+            </section>
+
+            <section class="checkin-qr" id="tab-seat" hidden>
+                <div class="checkin-switch">
+                    <span id="checkin-switch-label-2"></span>
+                    <button id="checkin-switch-btn-2" class="btn" type="button"></button>
+                </div>
+                <p class="checkin-help">
+                    Each seat gets its own code. A student sitting down scans their seat's code, signs in and
+                    confirms, and is placed at exactly that seat, no matter when they sit. Print a sheet for the
+                    range of seats you need, then tape one code to each seat.
+                </p>
+                <div class="checkin-seat-range">
+                    <label>From <input type="number" id="seat-sheet-from" min="1" value="1"></label>
+                    <label>To <input type="number" id="seat-sheet-to" min="1" value="50"></label>
+                    <a id="seat-sheet-link" class="btn btn-primary" target="_blank" rel="noopener">Open printable sheet</a>
+                </div>
             </section>
         </div>
 
