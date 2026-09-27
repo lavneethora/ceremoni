@@ -84,6 +84,40 @@ async def seat_student(db: AsyncSession, session_id: str, student_id: str) -> tu
     raise SeatingConflict("Could not find a free seat number, try again")
 
 
+async def seat_student_at(
+    db: AsyncSession, session_id: str, student_id: str, seat_position: int
+) -> tuple[SessionEntry, bool]:
+    """Seat a student at exactly this seat number, for seat-QR check-in.
+
+    Scanning the same seat's code again is a no-op for the same student. A
+    different student scanning an already taken seat is refused, and so is
+    moving a student who is already seated somewhere else, since seat QR
+    check-in only ever means "I am sitting in this seat".
+    """
+    entry = await _entry_or_new(db, session_id, student_id)
+    if entry.seat_position == seat_position:
+        return entry, False
+    if entry.seat_position is not None:
+        raise SeatingConflict(f"You are already seated at {entry.seat_position}")
+
+    taken = await db.execute(
+        select(SessionEntry.id).where(
+            SessionEntry.session_id == session_id, SessionEntry.seat_position == seat_position
+        )
+    )
+    if taken.scalar_one_or_none() is not None:
+        raise SeatingConflict(f"Seat {seat_position} is already taken")
+
+    entry.seat_position = seat_position
+    entry.checked_in_at = datetime.utcnow()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise SeatingConflict(f"Seat {seat_position} is already taken")
+    return entry, True
+
+
 async def unseat_student(db: AsyncSession, session_id: str, student_id: str) -> None:
     entry = await _entry_for(db, session_id, student_id)
     if entry is None or entry.seat_position is None:
