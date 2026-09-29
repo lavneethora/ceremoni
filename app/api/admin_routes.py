@@ -24,7 +24,7 @@ from app.services.announcements import (
     get_ready_entry,
     start_generation,
 )
-from app.services.checkin_links import line_signature
+from app.services.checkin_links import line_signature, seat_signature
 from app.services.config_loader import get_session_options
 from app.services.roster_import import RosterImportError, import_roster
 from app.services.seating import (
@@ -398,6 +398,28 @@ async def checkin_links(session_id: str, request: Request):
     _require_seating_session(session_id)
     line_url = str(request.url_for("start_line_checkin", session_id=session_id))
     return {"line_url": f"{line_url}?k={line_signature(session_id)}"}
+
+
+MAX_SEAT_SHEET = 500
+
+
+@router.get("/api/sessions/{session_id}/checkin/seat-links")
+async def checkin_seat_links(session_id: str, request: Request, seat_from: int, seat_to: int):
+    """The signed addresses to print as one QR per seat, for seats seat_from..seat_to."""
+    require_admin(request)
+    _require_seating_session(session_id)
+    if seat_from < 1 or seat_to < seat_from:
+        raise HTTPException(400, "Enter a valid seat range")
+    if seat_to - seat_from + 1 > MAX_SEAT_SHEET:
+        raise HTTPException(400, f"A sheet can hold at most {MAX_SEAT_SHEET} seats at a time")
+
+    base = str(request.url_for("start_seat_checkin", session_id=session_id, seat_position=0))[:-1]
+    return {
+        "seats": [
+            {"seat": n, "url": f"{base}{n}?k={seat_signature(session_id, n)}"}
+            for n in range(seat_from, seat_to + 1)
+        ]
+    }
 
 
 @router.post("/api/sessions/{session_id}/seating/{student_id}")

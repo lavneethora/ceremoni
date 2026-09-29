@@ -39,6 +39,14 @@ def line_signature_ok(session_id: str, signature: str) -> bool:
     return hmac.compare_digest(line_signature(session_id), signature or "")
 
 
+def seat_signature(session_id: str, seat_position: int) -> str:
+    return _sign("checkin-qr-v1", f"seat:{session_id}:{seat_position}")
+
+
+def seat_signature_ok(session_id: str, seat_position: int, signature: str) -> bool:
+    return hmac.compare_digest(seat_signature(session_id, seat_position), signature or "")
+
+
 def _confirm_serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(_key("checkin-confirm-v1"), salt="checkin-confirm")
 

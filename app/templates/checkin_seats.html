@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ceremoni Seat QR Sheet</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/checkin_seats.css">
+</head>
+<body>
+    <div class="sheet-controls no-print">
+        <label>From <input type="number" id="seat-from" min="1" value="1"></label>
+        <label>To <input type="number" id="seat-to" min="1" value="20"></label>
+        <button id="load-btn" class="btn btn-primary" type="button">Load</button>
+        <button id="print-btn" class="btn" type="button">Print</button>
+        <span id="sheet-status" class="sheet-status"></span>
+    </div>
+
+    <div class="seat-grid" id="seat-grid"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"
+            integrity="sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k"
+            crossorigin="anonymous"></script>
+    <script src="/static/checkin_seats.js"></script>
+</body>
+</html>

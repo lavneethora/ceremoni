@@ -13,14 +13,21 @@ const sessionSelect = document.getElementById('session-select');
 const summary = document.getElementById('checkin-summary');
 const emptyState = document.getElementById('checkin-empty');
 const body = document.getElementById('checkin-body');
-const tapPanel = document.getElementById('tab-tap');
-const linePanel = document.getElementById('tab-line');
+const tabPanels = {
+    tap: document.getElementById('tab-tap'),
+    line: document.getElementById('tab-line'),
+    seat: document.getElementById('tab-seat'),
+};
 const tabButtons = document.querySelectorAll('.checkin-tab');
-const switchBox = document.querySelector('.checkin-switch');
-const switchLabel = document.getElementById('checkin-switch-label');
-const switchBtn = document.getElementById('checkin-switch-btn');
+// Both QR tabs show the same session-wide open/close switch
+const switchBoxes = document.querySelectorAll('.checkin-switch');
+const switchLabels = [document.getElementById('checkin-switch-label'), document.getElementById('checkin-switch-label-2')];
+const switchBtns = [document.getElementById('checkin-switch-btn'), document.getElementById('checkin-switch-btn-2')];
 const lineQr = document.getElementById('line-qr');
 const lineUrl = document.getElementById('line-url');
+const seatFromInput = document.getElementById('seat-sheet-from');
+const seatToInput = document.getElementById('seat-sheet-to');
+const seatSheetLink = document.getElementById('seat-sheet-link');
 const searchInput = document.getElementById('checkin-search');
 const waitingList = document.getElementById('waiting-list');
 const seatedList = document.getElementById('seated-list');
@@ -69,8 +76,9 @@ async function selectSession() {
         summary.textContent = '';
         return;
     }
+    updateSeatSheetLink();
     await loadState();
-    if (!linePanel.hidden) showLineQr();
+    if (!tabPanels.line.hidden) showLineQr();
 }
 
 async function loadState() {
@@ -245,17 +253,19 @@ clearBtn.addEventListener('click', async () => {
 });
 
 function renderSwitch() {
-    switchBox.classList.toggle('open', checkinOpen);
-    switchLabel.textContent = checkinOpen
-        ? 'Student check-in is open. Students can scan now.'
-        : 'Student check-in is closed. Scans are refused.';
-    switchBtn.textContent = checkinOpen ? 'Close check-in' : 'Open check-in';
+    for (const box of switchBoxes) box.classList.toggle('open', checkinOpen);
+    for (const label of switchLabels) {
+        label.textContent = checkinOpen
+            ? 'Student check-in is open. Students can scan now.'
+            : 'Student check-in is closed. Scans are refused.';
+    }
+    for (const btn of switchBtns) btn.textContent = checkinOpen ? 'Close check-in' : 'Open check-in';
 }
 
-switchBtn.addEventListener('click', async () => {
+async function toggleCheckin() {
     if (!currentSessionId || busy) return;
     busy = true;
-    switchBtn.disabled = true;
+    for (const btn of switchBtns) btn.disabled = true;
     try {
         const resp = await fetch(`/admin/api/sessions/${currentSessionId}/checkin`, {
             method: 'PUT',
@@ -270,9 +280,11 @@ switchBtn.addEventListener('click', async () => {
         showToast('Connection problem, try again', true);
     }
     busy = false;
-    switchBtn.disabled = false;
+    for (const btn of switchBtns) btn.disabled = false;
     await loadState();
-});
+}
+
+for (const btn of switchBtns) btn.addEventListener('click', toggleCheckin);
 
 // The QR is drawn in the browser from a signed link the server made for this session
 async function showLineQr() {
@@ -292,16 +304,24 @@ async function showLineQr() {
     qrSessionId = sessionId;
 }
 
+function updateSeatSheetLink() {
+    const from = seatFromInput.value || '1';
+    const to = seatToInput.value || '1';
+    seatSheetLink.href = `/admin/checkin/seats?s=${currentSessionId}&from=${from}&to=${to}`;
+}
+
 for (const tab of tabButtons) {
     tab.addEventListener('click', () => {
         for (const t of tabButtons) t.classList.toggle('active', t === tab);
-        const line = tab.dataset.tab === 'line';
-        tapPanel.hidden = line;
-        linePanel.hidden = !line;
-        if (line) showLineQr();
+        const name = tab.dataset.tab;
+        for (const [key, panel] of Object.entries(tabPanels)) panel.hidden = key !== name;
+        if (name === 'line') showLineQr();
+        if (name === 'seat') updateSeatSheetLink();
     });
 }
 
+seatFromInput.addEventListener('input', updateSeatSheetLink);
+seatToInput.addEventListener('input', updateSeatSheetLink);
 searchInput.addEventListener('input', render);
 sessionSelect.addEventListener('change', selectSession);
 

@@ -107,6 +107,30 @@
     overflow-wrap: anywhere;
 }
 
+.checkin-seat-range {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+}
+
+.checkin-seat-range label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #6b6b6b;
+}
+
+.checkin-seat-range input[type="number"] {
+    width: 72px;
+    padding: 6px 8px;
+    font-family: inherit;
+    font-size: 13px;
+    border: 1px solid #e5e5e5;
+}
+
 .checkin-columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
