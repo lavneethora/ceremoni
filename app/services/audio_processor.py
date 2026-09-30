@@ -4,7 +4,6 @@ import asyncio
 import numpy as np
 import noisereduce as nr
 from pydub import AudioSegment
-from pydub.silence import detect_leading_silence
 
 
 async def clean_audio(raw_bytes: bytes, file_format: str = "wav") -> bytes:
@@ -21,11 +20,10 @@ def _clean_audio_sync(raw_bytes: bytes, file_format: str) -> bytes:
 
     audio = audio.set_channels(1).set_frame_rate(16000).set_sample_width(2)
 
-    silence_thresh = audio.dBFS - 16
-    start_trim = detect_leading_silence(audio, silence_threshold=silence_thresh)
-    end_trim = detect_leading_silence(audio.reverse(), silence_threshold=silence_thresh)
-    audio = audio[start_trim:len(audio) - end_trim]
-
+    # No silence trim here: a relative dBFS threshold cuts into real speech on
+    # quieter recordings, not just dead air (confirmed on real recordings: one
+    # cut 57% of the clip, another 60%, both from the edges of actual words).
+    # gpt-audio-1.5 transcribes leading/trailing silence fine on its own.
     audio = audio.apply_gain(-audio.max_dBFS)
 
     samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
