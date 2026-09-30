@@ -23,6 +23,19 @@ AZURE_EN_US_IPA = (
     "Use ː for long vowels. Use spaces between words only."
 )
 
+# Every character the symbols above are built from, plus the space between
+# words. Note this has no ASCII "g" (Azure wants ɡ, U+0261) and no c/q/x/y,
+# which is what makes it a usable test for "this is IPA, not a sentence".
+ALLOWED_IPA_CHARS = frozenset(
+    "iːɪʊuəɛɜɔæʌɑaeo"      # vowels and the length mark
+    "pbtdkɡfvθðszʃʒhmnŋlrjw"  # consonants
+    " "
+)
+
+# Marks the model sometimes adds that Azure does not want, stripped before
+# the character check rather than counted against it
+IPA_STRIP_CHARS = "[]/()ˈˌ.'\"`"
+
 
 def _get_client():
     global _client
@@ -124,7 +137,18 @@ def _one_ipa_attempt(audio_b64: str, context: str) -> str:
 
 
 def _looks_like_ipa(text: str) -> bool:
-    return bool(text) and len(text) <= 80 and not any(ch in text for ch in ".,!?")
+    """Whether every character is one Azure can actually speak in a phoneme tag.
+
+    A length-and-punctuation guess is not enough: it accepted
+    '{"audio_data": "placeholder_for_audio_data"}' as a pronunciation, which
+    would have been stored and read out as a student's name. Checking the
+    character set rejects that, rejects English prose (c, g, q, x, y and
+    capitals never appear in this symbol set), and rejects IPA symbols outside
+    what Azure supports, which would fail at synthesis time anyway.
+    """
+    if not text or len(text) > 80:
+        return False
+    return all(ch in ALLOWED_IPA_CHARS for ch in text)
 
 
 def _extract_ipa(raw: str) -> str:
@@ -135,13 +159,14 @@ def _extract_ipa(raw: str) -> str:
     line before the answer. Try the whole response first; if that looks like
     prose, fall back to the text after the last colon, then the last line.
     """
-    candidates = [raw.strip("\"'/[]")]
+    candidates = [raw]
     if ":" in raw:
-        candidates.append(raw.rsplit(":", 1)[-1].strip().strip("\"'/[]"))
+        candidates.append(raw.rsplit(":", 1)[-1])
     if "\n" in raw:
-        candidates.append(raw.rsplit("\n", 1)[-1].strip().strip("\"'/[]"))
+        candidates.append(raw.rsplit("\n", 1)[-1])
 
     for candidate in candidates:
-        if _looks_like_ipa(candidate):
-            return candidate
+        cleaned = "".join(ch for ch in candidate if ch not in IPA_STRIP_CHARS).strip()
+        if _looks_like_ipa(cleaned):
+            return cleaned
     return ""
