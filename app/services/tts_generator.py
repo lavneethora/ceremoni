@@ -34,7 +34,26 @@ def build_ssml(inner: str) -> str:
     return f'{SSML_OPEN}<voice name="{settings.tts_voice}">{inner}</voice></speak>'
 
 
-def _speak(primary: str | None, fallback: str) -> bytes:
+class NoPronunciation(Exception):
+    """Refusing to synthesise a name we have no recorded pronunciation for."""
+
+
+def _speak(primary: str | None, fallback: str, allow_plain: bool = False) -> bytes:
+    """Synthesise `primary` (phoneme SSML). `fallback` reads the spelling instead.
+
+    The spelling is only ever used when the caller says the student genuinely
+    has no recording (`allow_plain`). Otherwise a missing or rejected
+    pronunciation raises, because reading a name off its spelling is the exact
+    failure this system exists to prevent, and it used to happen silently.
+    """
+    if primary is None and not allow_plain:
+        raise NoPronunciation(
+            "No usable pronunciation for this recording, refusing to read the spelling"
+        )
+    return _synthesise(primary, fallback, allow_plain)
+
+
+def _synthesise(primary: str | None, fallback: str, allow_plain: bool) -> bytes:
     speech_config = speechsdk.SpeechConfig(
         subscription=settings.azure_speech_key,
         region=settings.azure_speech_region,
@@ -49,9 +68,11 @@ def _speak(primary: str | None, fallback: str) -> bytes:
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
             return result.audio_data
 
-        # If IPA failed, warn and fall back
+        # Azure refused the phoneme markup itself
         cancellation = result.cancellation_details
         print(f"  ⚠ IPA rejected: {cancellation.error_details}")
+        if not allow_plain:
+            raise NoPronunciation(f"Azure rejected the pronunciation: {cancellation.error_details}")
         print("  Falling back to plain text...")
 
     result = synthesizer.speak_ssml_async(build_ssml(fallback)).get()
@@ -62,27 +83,38 @@ def _speak(primary: str | None, fallback: str) -> bytes:
     raise RuntimeError(f"TTS failed: {cancellation.reason} - {cancellation.error_details}")
 
 
-async def generate_tts(name: str, ipa: str | None = None) -> bytes:
-    return await asyncio.to_thread(_generate_sync, name, ipa)
+async def generate_tts(name: str, ipa: str | None = None, allow_plain: bool = False) -> bytes:
+    """`allow_plain` is only for students who never submitted a recording."""
+    return await asyncio.to_thread(_generate_sync, name, ipa, allow_plain)
 
 
-def _generate_sync(name: str, ipa: str | None = None) -> bytes:
+def _generate_sync(name: str, ipa: str | None = None, allow_plain: bool = False) -> bytes:
     cleaned = clean_ipa(ipa) if ipa else None
     if cleaned:
         print(f"  IPA for TTS: {cleaned}")
-    return _speak(name_markup(name, cleaned) if cleaned else None, escape(name))
+    return _speak(name_markup(name, cleaned) if cleaned else None, escape(name), allow_plain)
 
 
 async def generate_announcement(
-    name: str, ipa: str | None, major: str | None, honors_phrase: str | None
+    name: str, ipa: str | None, major: str | None, honors_phrase: str | None,
+    allow_plain: bool = False,
 ) -> bytes:
-    """One clip: the name (with its cached IPA), then the major, then the honors phrase."""
-    return await asyncio.to_thread(_generate_announcement_sync, name, ipa, major, honors_phrase)
+    """One clip: the name (with its cached IPA), then the major, then the honors phrase.
+
+    `allow_plain` is only for students who never submitted a recording, who are
+    shown as "No recording" on the dashboard so someone can chase them.
+    """
+    return await asyncio.to_thread(
+        _generate_announcement_sync, name, ipa, major, honors_phrase, allow_plain
+    )
 
 
 def _generate_announcement_sync(
-    name: str, ipa: str | None, major: str | None, honors_phrase: str | None
+    name: str, ipa: str | None, major: str | None, honors_phrase: str | None,
+    allow_plain: bool = False,
 ) -> bytes:
     cleaned = clean_ipa(ipa) if ipa else None
     primary = announcement_markup(name, cleaned, major, honors_phrase) if cleaned else None
-    return _speak(primary, announcement_markup(name, None, major, honors_phrase))
+    return _speak(
+        primary, announcement_markup(name, None, major, honors_phrase), allow_plain
+    )
