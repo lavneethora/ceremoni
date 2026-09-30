@@ -45,7 +45,10 @@ async def process(recording_id: str, session: AsyncSession) -> Recording:
     ipa = await phonetic_converter.to_ipa(cleaned_bytes, student.typed_name, student.phonetic_hint)
     recording.ipa_representation = ipa
 
-    recording.processing_status = "awaiting_approval"
+    # An empty result means every attempt at transcribing this recording failed.
+    # It gets its own status so it shows up as needing attention instead of
+    # sitting in the approval queue looking like every other recording.
+    recording.processing_status = "awaiting_approval" if ipa else "ipa_failed"
     await session.commit()
     return recording
 
@@ -60,6 +63,17 @@ async def generate_final_audio(recording_id: str, session: AsyncSession, ipa_ove
 
     student = recording.student
     ipa = ipa_override or recording.ipa_representation
+
+    # Never approve a recording we could not transcribe: that used to produce
+    # spelling-based audio marked complete, with nothing to distinguish it from
+    # a real pronunciation.
+    if not ipa:
+        recording.processing_status = "ipa_failed"
+        await session.commit()
+        raise tts_generator.NoPronunciation(
+            f"No usable pronunciation for {student.typed_name}. "
+            "Re-process the recording or ask the student to record it again."
+        )
 
     audio_bytes = await tts_generator.generate_tts(student.typed_name, ipa=ipa)
 
