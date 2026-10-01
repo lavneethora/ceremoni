@@ -49,12 +49,18 @@ async def to_ipa(audio_bytes: bytes, typed_name: str, phonetic_hint: str | None 
 
 
 def _to_ipa_sync(audio_bytes: bytes, typed_name: str, phonetic_hint: str | None = None) -> str:
-    """The IPA for this recording, or "" if every attempt came back unusable.
+    """The IPA for this recording, or "" if every model and attempt failed.
 
-    gpt-audio-1.5 returns an empty completion for a sizeable minority of calls
-    on audio it handles fine on the next try, so a single empty answer means
-    very little. Retry before believing it: the caller treats "" as "we have no
-    pronunciation for this person", which must never be a coin flip.
+    Two things make a single answer unreliable. These models return an empty
+    completion for a minority of calls on audio they read correctly the next
+    time, so one empty answer means very little. And they differ on which
+    recordings they can handle at all: measured over the same clips,
+    gpt-audio-2025-08-28 transcribed three that gpt-audio-1.5 never managed.
+
+    So every model in settings.ipa_models is tried in order, each with retries.
+    The caller treats "" as "we have no pronunciation for this person", which
+    stops the ceremony for them, so it has to mean we genuinely exhausted the
+    options rather than got unlucky once.
     """
     # Ensure audio is wav format for the API (only wav and mp3 supported)
     # The input might already be wav from the cleaning step, but ensure it
@@ -72,26 +78,28 @@ def _to_ipa_sync(audio_bytes: bytes, typed_name: str, phonetic_hint: str | None 
     if phonetic_hint:
         context += f"\nThe student provided this phonetic hint: {phonetic_hint}"
 
-    for attempt in range(1, IPA_ATTEMPTS + 1):
-        result = _one_ipa_attempt(audio_b64, context)
-        if result:
-            if attempt > 1:
-                print(f"Phonetic converter: attempt {attempt} succeeded for '{typed_name}'")
-            print(f"Phonetic converter: IPA for '{typed_name}' = {result}")
-            return result
-        if attempt < IPA_ATTEMPTS:
-            time.sleep(IPA_RETRY_WAIT_SECONDS * attempt)
+    models = [m.strip() for m in settings.ipa_models.split(",") if m.strip()]
+    for model in models:
+        for attempt in range(1, IPA_ATTEMPTS + 1):
+            result = _one_ipa_attempt(model, audio_b64, context)
+            if result:
+                print(f"Phonetic converter: IPA for '{typed_name}' = {result}  [{model}]")
+                return result
+            if attempt < IPA_ATTEMPTS:
+                time.sleep(IPA_RETRY_WAIT_SECONDS * attempt)
+        print(f"Phonetic converter: {model} gave nothing usable for '{typed_name}'")
 
-    print(f"Phonetic converter: no usable IPA for '{typed_name}' after {IPA_ATTEMPTS} attempts")
+    print(f"Phonetic converter: no usable IPA for '{typed_name}' from any of {models}")
     return ""
 
 
-def _one_ipa_attempt(audio_b64: str, context: str) -> str:
+def _one_ipa_attempt(model: str, audio_b64: str, context: str) -> str:
     client = _get_client()
 
     response = client.chat.completions.create(
-        model="gpt-audio-1.5",
+        model=model,
         modalities=["text"],
+        max_completion_tokens=300,
         messages=[
             {
                 "role": "system",
@@ -167,6 +175,10 @@ def _extract_ipa(raw: str) -> str:
 
     for candidate in candidates:
         cleaned = "".join(ch for ch in candidate if ch not in IPA_STRIP_CHARS).strip()
+        # Models often capitalise the first letter out of name-writing habit
+        # ("Deɪv tʊʃɑːr bʌktə"). The Azure en-US set has no uppercase symbol at
+        # all, so lowercasing cannot turn one valid symbol into a different one.
+        cleaned = cleaned.lower()
         if _looks_like_ipa(cleaned):
             return cleaned
     return ""
