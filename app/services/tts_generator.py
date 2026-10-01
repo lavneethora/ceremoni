@@ -9,8 +9,10 @@ SSML_OPEN = '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xm
 
 
 def clean_ipa(ipa: str) -> str:
-    # Strip any stray brackets/slashes/stress marks
-    for ch in "[]/()" "ˈˌ.'\"":
+    # Strip stray delimiters. Stress marks (ˈ primary, ˌ secondary) are kept:
+    # Azure uses them to decide which syllable to lean on, and without them
+    # every name comes out flat, which is most of what made these sound robotic.
+    for ch in "[]/()" ".'\"":
         ipa = ipa.replace(ch, "")
     return ipa.strip()
 
