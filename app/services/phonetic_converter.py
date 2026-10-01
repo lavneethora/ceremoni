@@ -2,6 +2,7 @@ import asyncio
 import base64
 import io
 import time
+from collections import Counter
 
 from openai import OpenAI
 from pydub import AudioSegment
@@ -19,6 +20,9 @@ IPA_RETRY_WAIT_SECONDS = 2
 # attempt varies the temperature and the container the audio is sent in. Both
 # were measured recovering recordings that four identical retries could not.
 IPA_TEMPERATURES = (0.0, 0.4, 0.8, 1.0)
+
+# Readings to take per recording; the most common one wins
+IPA_SAMPLES = 3
 
 # Azure en-US supported IPA phonemes
 # Source: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support
@@ -56,16 +60,12 @@ async def to_ipa(audio_bytes: bytes, typed_name: str, phonetic_hint: str | None 
 def _to_ipa_sync(audio_bytes: bytes, typed_name: str, phonetic_hint: str | None = None) -> str:
     """The IPA for this recording, or "" if every model and attempt failed.
 
-    Two things make a single answer unreliable. These models return an empty
-    completion for a minority of calls on audio they read correctly the next
-    time, so one empty answer means very little. And they differ on which
-    recordings they can handle at all: measured over the same clips,
-    gpt-audio-2025-08-28 transcribed three that gpt-audio-1.5 never managed.
-
-    So every model in settings.ipa_models is tried in order, each with retries.
-    The caller treats "" as "we have no pronunciation for this person", which
-    stops the ceremony for them, so it has to mean we genuinely exhausted the
-    options rather than got unlucky once.
+    Read the recording several times and keep the reading that comes back most
+    often. A single reading is occasionally wrong in a way nothing downstream
+    can catch: the same audio produced "ʒʊl bədʒɑːdʒ" (zhul) and "ʃɪdʒʊl"
+    (shi-jul) for Rijul Bajaj on separate runs, both well-formed IPA, both
+    wrong, against four runs that got it right. Validation cannot tell a
+    plausible wrong answer from a right one, but a vote can.
     """
     # Ensure audio is wav format for the API (only wav and mp3 supported)
     # The input might already be wav from the cleaning step, but ensure it
@@ -89,20 +89,41 @@ def _to_ipa_sync(audio_bytes: bytes, typed_name: str, phonetic_hint: str | None 
     if mp3_b64:
         payloads.append(("mp3", mp3_b64))
 
-    models = [m.strip() for m in settings.ipa_models.split(",") if m.strip()]
-    for model in models:
+    samples = [r for r in (_one_reading(payloads, context) for _ in range(IPA_SAMPLES)) if r]
+    if not samples:
+        print(f"Phonetic converter: no usable IPA for '{typed_name}'")
+        return ""
+
+    # Vote on the pronunciation, not on how it was spaced. The same reading
+    # comes back as both "deɪv tʊʃɑːr bʌktə" and "d eɪ v t ʊ ʃ ɑː r b ʌ k t ə",
+    # and counting those separately splits the vote three ways and defeats it.
+    by_sound: dict[str, list[str]] = {}
+    for sample in samples:
+        by_sound.setdefault(sample.replace(" ", ""), []).append(sample)
+
+    winner = max(by_sound.values(), key=len)
+    best = Counter(winner).most_common(1)[0][0]
+
+    if len(by_sound) > 1:
+        print(
+            f"Phonetic converter: readings disagreed for '{typed_name}' "
+            f"({len(winner)} of {len(samples)}), taking the majority"
+        )
+    print(f"Phonetic converter: IPA for '{typed_name}' = {best}")
+    return best
+
+
+def _one_reading(payloads: list[tuple[str, str]], context: str) -> str:
+    """One reading: each model in turn, retrying with a varied request."""
+    for model in [m.strip() for m in settings.ipa_models.split(",") if m.strip()]:
         for attempt in range(IPA_ATTEMPTS):
             fmt, payload = payloads[attempt % len(payloads)]
             temperature = IPA_TEMPERATURES[attempt % len(IPA_TEMPERATURES)]
             result = _one_ipa_attempt(model, payload, context, fmt, temperature)
             if result:
-                print(f"Phonetic converter: IPA for '{typed_name}' = {result}  [{model}]")
                 return result
             if attempt < IPA_ATTEMPTS - 1:
                 time.sleep(IPA_RETRY_WAIT_SECONDS * (attempt + 1))
-        print(f"Phonetic converter: {model} gave nothing usable for '{typed_name}'")
-
-    print(f"Phonetic converter: no usable IPA for '{typed_name}' from any of {models}")
     return ""
 
 
