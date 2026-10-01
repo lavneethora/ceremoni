@@ -21,6 +21,8 @@ const generateBtn = document.getElementById('generate-btn');
 const rosterFile = document.getElementById('roster-file');
 
 let statusTimer = null;
+let statusFailures = 0;
+const MAX_STATUS_FAILURES = 20;  // about a minute of retries at 3s
 
 // Load events and sessions on page load
 async function init() {
@@ -74,8 +76,27 @@ async function loadStudents() {
 async function refreshAnnounceStatus() {
     clearTimeout(statusTimer);
     const sessionId = currentSessionId;
-    const resp = await fetch(`/admin/api/sessions/${sessionId}/announcements/status`);
-    if (!resp.ok || sessionId !== currentSessionId) return;
+
+    let resp;
+    try {
+        resp = await fetch(`/admin/api/sessions/${sessionId}/announcements/status`);
+    } catch (e) {
+        resp = null;
+    }
+    if (sessionId !== currentSessionId) return;
+    if (!resp || !resp.ok) {
+        // One failed poll must not end the polling. A blip or a cold start used
+        // to stop it for good, leaving every row on "Outdated" long after the
+        // run had finished, with nothing short of a reload to recover. Bounded,
+        // so a genuinely dead endpoint does not get polled forever.
+        if (++statusFailures <= MAX_STATUS_FAILURES) {
+            statusTimer = setTimeout(() => refreshAnnounceStatus(), 3000);
+        } else {
+            announceStatus.textContent = 'Cannot reach the server, reload to retry';
+        }
+        return;
+    }
+    statusFailures = 0;
     const st = await resp.json();
 
     const needs = st.stale + st.missing;
