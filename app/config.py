@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     storage_path: str = "./storage"
     tts_voice: str = "en-US-GuyNeural"
     whisper_model: str = "base"
+    # Models tried in order for audio to IPA, first usable answer wins. Pinned
+    # to dated snapshots so OpenAI cannot move them under a running ceremony.
+    ipa_models: str = "gpt-audio-2025-08-28,gpt-audio-1.5"
 
     # Microsoft Graph API (Forms sync)
     ms_tenant_id: str = ""
