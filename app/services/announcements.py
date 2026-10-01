@@ -133,12 +133,6 @@ async def _generate_one(db: AsyncSession, entry: SessionEntry) -> None:
                 _ipa_for(student),
                 effective_major(entry, student),
                 HONORS_PHRASES.get(entry.honors_level),
-                # Plain voice is only acceptable for someone who never
-                # submitted a recording, which the dashboard already shows as
-                # "No recording". If they did submit one, a missing IPA means
-                # transcription failed and this must fail rather than read the
-                # spelling.
-                allow_plain=not student.recordings,
             )
             break
         except Exception as e:
