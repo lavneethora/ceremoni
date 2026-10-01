@@ -24,6 +24,10 @@ IPA_TEMPERATURES = (0.0, 0.4, 0.8, 1.0)
 # Readings to take per recording; the most common one wins
 IPA_SAMPLES = 3
 
+# Used only to re-space an answer whose sounds are right but whose spacing is
+# not. Pinned, like the audio models, so it cannot change underneath a ceremony.
+IPA_REGROUP_MODEL = "gpt-5.5-2026-04-23"
+
 # Azure en-US supported IPA phonemes
 # Source: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support
 AZURE_EN_US_IPA = (
@@ -117,8 +121,57 @@ def _to_ipa_sync(audio_bytes: bytes, typed_name: str, phonetic_hint: str | None 
             f"Phonetic converter: readings disagreed for '{typed_name}' "
             f"({len(winner)} of {len(samples)}), taking the majority"
         )
+
+    best = _regroup(typed_name, best)
     print(f"Phonetic converter: IPA for '{typed_name}' = {best}")
     return best
+
+
+def _regroup(typed_name: str, ipa: str) -> str:
+    """Re-space IPA that has the right sounds grouped wrongly.
+
+    Some names come back split at syllables, "ˈkɑːr sən ˈleɪn ˈkæ fiː" rather
+    than "ˈkɑːrsən ˈleɪn ˈkæfiː", and the model does it consistently for those
+    names however many times it is asked. Azure reads every space as a word
+    break, so the sounds are right but the delivery is chopped up.
+
+    Only a pure re-spacing is accepted: same symbols in the same order, right
+    number of runs. Anything else and the original stands, so this can improve
+    the spacing or do nothing, never change a pronunciation.
+    """
+    wanted = len(typed_name.split())
+    if not ipa or len(ipa.split()) == wanted:
+        return ipa
+
+    try:
+        response = _get_client().chat.completions.create(
+            model=IPA_REGROUP_MODEL,
+            max_completion_tokens=2000,
+            messages=[
+                {"role": "system", "content": (
+                    "You re-space IPA so it has exactly one run per word of the name. "
+                    "Do not change, add or remove any symbol, including stress marks. "
+                    "Only move spaces. Reply with the IPA and nothing else."
+                )},
+                {"role": "user", "content": (
+                    f"Name: {typed_name}\nIPA: {ipa}\n"
+                    f"It must end up as exactly {wanted} space-separated runs."
+                )},
+            ],
+        )
+        candidate = (response.choices[0].message.content or "").strip()
+    except Exception as e:
+        print(f"Phonetic converter: could not re-space '{typed_name}': {e}")
+        return ipa
+
+    if (
+        candidate.replace(" ", "") == ipa.replace(" ", "")
+        and len(candidate.split()) == wanted
+        and _looks_like_ipa(candidate)
+    ):
+        print(f"Phonetic converter: re-spaced '{typed_name}' into {wanted} words")
+        return candidate
+    return ipa
 
 
 def _one_reading(payloads: list[tuple[str, str]], context: str) -> str:
