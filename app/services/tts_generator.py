@@ -34,7 +34,21 @@ def build_ssml(inner: str) -> str:
     return f'{SSML_OPEN}<voice name="{settings.tts_voice}">{inner}</voice></speak>'
 
 
-def _speak(primary: str | None, fallback: str) -> bytes:
+class NoPronunciation(Exception):
+    """We have no recorded pronunciation for this name, so we will not say it.
+
+    There is deliberately no spelling-based fallback anywhere in this module.
+    Reading a name off its spelling is the failure this system exists to
+    prevent, and when it happened silently it reached three ceremonies
+    unnoticed. A name we cannot pronounce is reported as "recording could not
+    be processed" and a human deals with it.
+    """
+
+
+def _speak(markup: str | None) -> bytes:
+    if not markup:
+        raise NoPronunciation("Recording could not be processed")
+
     speech_config = speechsdk.SpeechConfig(
         subscription=settings.azure_speech_key,
         region=settings.azure_speech_region,
@@ -44,22 +58,14 @@ def _speak(primary: str | None, fallback: str) -> bytes:
     )
     synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=None)
 
-    if primary:
-        result = synthesizer.speak_ssml_async(build_ssml(primary)).get()
-        if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-            return result.audio_data
-
-        # If IPA failed, warn and fall back
-        cancellation = result.cancellation_details
-        print(f"  ⚠ IPA rejected: {cancellation.error_details}")
-        print("  Falling back to plain text...")
-
-    result = synthesizer.speak_ssml_async(build_ssml(fallback)).get()
+    result = synthesizer.speak_ssml_async(build_ssml(markup)).get()
     if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
         return result.audio_data
 
     cancellation = result.cancellation_details
-    raise RuntimeError(f"TTS failed: {cancellation.reason} - {cancellation.error_details}")
+    raise NoPronunciation(
+        f"Recording could not be processed: Azure rejected it ({cancellation.error_details})"
+    )
 
 
 async def generate_tts(name: str, ipa: str | None = None) -> bytes:
@@ -68,15 +74,16 @@ async def generate_tts(name: str, ipa: str | None = None) -> bytes:
 
 def _generate_sync(name: str, ipa: str | None = None) -> bytes:
     cleaned = clean_ipa(ipa) if ipa else None
-    if cleaned:
-        print(f"  IPA for TTS: {cleaned}")
-    return _speak(name_markup(name, cleaned) if cleaned else None, escape(name))
+    if not cleaned:
+        raise NoPronunciation("Recording could not be processed: no pronunciation available")
+    print(f"  IPA for TTS: {cleaned}")
+    return _speak(name_markup(name, cleaned))
 
 
 async def generate_announcement(
     name: str, ipa: str | None, major: str | None, honors_phrase: str | None
 ) -> bytes:
-    """One clip: the name (with its cached IPA), then the major, then the honors phrase."""
+    """One clip: the name (with its recorded IPA), then the major, then the honors phrase."""
     return await asyncio.to_thread(_generate_announcement_sync, name, ipa, major, honors_phrase)
 
 
@@ -84,5 +91,6 @@ def _generate_announcement_sync(
     name: str, ipa: str | None, major: str | None, honors_phrase: str | None
 ) -> bytes:
     cleaned = clean_ipa(ipa) if ipa else None
-    primary = announcement_markup(name, cleaned, major, honors_phrase) if cleaned else None
-    return _speak(primary, announcement_markup(name, None, major, honors_phrase))
+    if not cleaned:
+        raise NoPronunciation("Recording could not be processed: no pronunciation available")
+    return _speak(announcement_markup(name, cleaned, major, honors_phrase))
