@@ -38,12 +38,14 @@ AZURE_EN_US_IPA = (
 ALLOWED_IPA_CHARS = frozenset(
     "iːɪʊuəɛɜɔæʌɑaeo"      # vowels and the length mark
     "pbtdkɡfvθðszʃʒhmnŋlrjw"  # consonants
+    "ˈˌ"                      # primary and secondary stress
     " "
 )
 
-# Marks the model sometimes adds that Azure does not want, stripped before
-# the character check rather than counted against it
-IPA_STRIP_CHARS = "[]/()ˈˌ.'\"`"
+# Delimiters the model sometimes wraps the answer in, stripped before the
+# character check rather than counted against it. Stress marks are not in here:
+# Azure wants them, and dropping them is what made every name come out flat.
+IPA_STRIP_CHARS = "[]/().'\"`"
 
 
 def _get_client():
@@ -102,7 +104,13 @@ def _to_ipa_sync(audio_bytes: bytes, typed_name: str, phonetic_hint: str | None 
         by_sound.setdefault(sample.replace(" ", ""), []).append(sample)
 
     winner = max(by_sound.values(), key=len)
-    best = Counter(winner).most_common(1)[0][0]
+    # Within the winning pronunciation, prefer the spelling that groups into one
+    # run per word of the name. Azure treats a space inside ph as a word break,
+    # so "r ɪ dʒ ʊ l b ə dʒ ɑː dʒ" is ten words to it and comes out chopped up,
+    # while "ˈrɪdʒʊl bəˈdʒɑːdʒ" is the two it should be.
+    wanted_groups = len(typed_name.split())
+    grouped = [r for r in winner if len(r.split()) == wanted_groups]
+    best = Counter(grouped or winner).most_common(1)[0][0]
 
     if len(by_sound) > 1:
         print(
@@ -153,13 +161,16 @@ def _one_ipa_attempt(model: str, audio_b64: str, context: str, fmt: str, tempera
                     f"{AZURE_EN_US_IPA}\n\n"
                     "Rules:\n"
                     "- Return ONLY the IPA symbols, nothing else\n"
-                    "- No brackets, no slashes, no stress marks\n"
-                    "- Use spaces between words\n"
+                    "- No brackets, no slashes\n"
+                    "- Mark the stressed syllable with ˈ before it, and any\n"
+                    "  secondary stress with ˌ. Do not leave stress out\n"
+                    "- Put ONE space between the words of the name and no spaces\n"
+                    "  inside a word. A two word name gets exactly one space\n"
                     "- Do NOT use any IPA symbols not listed above\n"
                     "- Do NOT add any preamble, explanation, or lead-in sentence\n"
                     "- Do NOT write things like \"The IPA transcription is:\"\n"
                     "- Your entire reply must be the IPA transcription and nothing else\n"
-                    "- Example output: lʌvniːt hɔːrə"
+                    "- Example output for 'Lavneet Hora': ˈlʌvniːt ˈhɔːrə"
                 ),
             },
             {
