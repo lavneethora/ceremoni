@@ -409,8 +409,13 @@ async def _delete_recordings_for_student(session, student):
             if not path:
                 continue
             try:
-                if os.path.exists(path):
-                    os.remove(path)
+                # Has to go through the storage backend. This used to call
+                # os.remove, which silently did nothing once audio moved to
+                # Supabase, because "supabase://..." is not a filesystem path.
+                # Every re-sync then left its audio behind and wrote the next
+                # copy under a fresh recording id, which is how one student
+                # ended up with ten copies of the same recording.
+                await storage.delete_from_path(path)
             except Exception as e:
                 print(f"Forms sync: Could not remove file {path}: {e}")
         await session.delete(rec)
