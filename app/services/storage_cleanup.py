@@ -10,6 +10,8 @@ Works off the database as the source of truth: a file is orphaned when no
 recording and no session entry names it.
 """
 
+import time
+
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +21,7 @@ from app.models import Recording, SessionEntry
 from app.services.storage import storage
 
 PREFIX = "supabase://"
+LIST_ATTEMPTS = 3
 
 
 async def _referenced_keys(db: AsyncSession) -> set[str]:
@@ -39,15 +42,26 @@ async def _referenced_keys(db: AsyncSession) -> set[str]:
 
 
 def _list(client: httpx.Client, prefix: str) -> list[dict]:
+    """One page at a time, retried. A half-read listing would look like missing
+    files, and this decides what gets deleted, so it raises rather than
+    returning a short answer."""
     out: list[dict] = []
     offset = 0
     while True:
-        resp = client.post(
-            f"{settings.supabase_url.rstrip('/')}/storage/v1/object/list/{settings.supabase_bucket}",
-            json={"prefix": prefix, "limit": 1000, "offset": offset},
-        )
-        resp.raise_for_status()
-        batch = resp.json()
+        batch = None
+        for attempt in range(LIST_ATTEMPTS):
+            try:
+                resp = client.post(
+                    f"{settings.supabase_url.rstrip('/')}/storage/v1/object/list/{settings.supabase_bucket}",
+                    json={"prefix": prefix, "limit": 1000, "offset": offset},
+                )
+                resp.raise_for_status()
+                batch = resp.json()
+                break
+            except Exception:
+                if attempt == LIST_ATTEMPTS - 1:
+                    raise
+                time.sleep(2 * (attempt + 1))
         out += batch
         if len(batch) < 1000:
             break
