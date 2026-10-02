@@ -27,6 +27,7 @@ from app.services.announcements import (
 from app.services.checkin_links import line_signature, seat_signature
 from app.services.config_loader import get_session_options
 from app.services.roster_import import RosterImportError, import_roster
+from app.services.storage_cleanup import delete_orphans
 from app.services.seating import (
     SeatingConflict,
     clear_seating,
@@ -505,6 +506,23 @@ async def set_session_checkin(
         raise HTTPException(400, "Expected true or false in 'open'")
     await set_checkin_open(session, session_id, open_)
     return {"checkin_open": open_}
+
+
+# --- Storage housekeeping ---
+
+@router.post("/api/storage/cleanup")
+async def cleanup_storage(
+    request: Request,
+    apply: bool = False,
+    session: AsyncSession = Depends(get_session),
+):
+    """Report audio no database row points at. Pass apply=true to delete it.
+
+    Deleting a student does not remove their recordings from storage, and
+    nothing else reconciles the two, so orphans build up over time.
+    """
+    require_admin(request)
+    return await delete_orphans(session, dry_run=not apply)
 
 
 # --- Debug: raw Excel data ---
