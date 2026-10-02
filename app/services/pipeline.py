@@ -1,7 +1,10 @@
+import hashlib
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
 
+from app.config import settings
 from app.models import Recording
 from app.services import audio_processor, phonetic_converter, tts_generator
 from app.services.storage import storage
@@ -77,7 +80,20 @@ async def generate_final_audio(recording_id: str, session: AsyncSession, ipa_ove
 
     audio_bytes = await tts_generator.generate_tts(student.typed_name, ipa=ipa)
 
-    final_path = await storage.save(student.id, f"{recording.id}_final.mp3", audio_bytes)
+    # The pronunciation is in the file name, so regenerating a clip gives it a
+    # new URL. Supabase serves these from a cache, and reusing one path meant a
+    # re-processed student could keep playing their old audio, which looks
+    # exactly like re-processing having done nothing.
+    stamp = hashlib.sha1(f"{settings.tts_voice}|{ipa}|{student.typed_name}".encode()).hexdigest()[:10]
+    final_path = await storage.save(student.id, f"{recording.id}_{stamp}_final.mp3", audio_bytes)
+
+    previous = recording.generated_audio_url
+    if previous and previous != final_path:
+        try:
+            await storage.delete_from_path(previous)
+        except Exception as e:
+            print(f"Pipeline: could not remove the previous clip {previous}: {e}")
+
     recording.generated_audio_url = final_path
     recording.processing_status = "complete"
     recording.pronunciation_approved = True
