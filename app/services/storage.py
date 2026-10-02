@@ -30,6 +30,12 @@ class LocalStorage:
         async with aiofiles.open(path, "rb") as f:
             return await f.read()
 
+    async def delete_from_path(self, path: str) -> bool:
+        if not os.path.exists(path):
+            return False
+        os.remove(path)
+        return True
+
     def get_path(self, student_id: str, filename: str) -> str:
         return self._path(student_id, filename)
 
@@ -88,6 +94,17 @@ class SupabaseStorage:
         else:
             key = path
         return await self._download(key)
+
+    async def delete_from_path(self, path: str) -> bool:
+        key = path[len("supabase://"):] if path.startswith("supabase://") else path
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.request(
+                "DELETE",
+                f"{self.url}/storage/v1/object/{self.bucket}",
+                headers={**self.headers, "Content-Type": "application/json"},
+                json={"prefixes": [key]},
+            )
+        return resp.status_code == 200
 
     async def _download(self, key: str) -> bytes:
         url = f"{self.url}/storage/v1/object/public/{self.bucket}/{key}"
