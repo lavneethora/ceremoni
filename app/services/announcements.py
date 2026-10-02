@@ -144,6 +144,16 @@ async def _generate_one(db: AsyncSession, entry: SessionEntry) -> None:
 
     # The key is in the file name so a changed clip gets a new URL and is never served from a cache
     path = await storage.save(student.id, f"{entry.id}_{key[:10]}_announce.mp3", audio)
+
+    # That new name also means the old clip is now unreferenced, so remove it
+    # rather than leaving a copy behind on every regeneration
+    previous = entry.announcement_audio_path
+    if previous and previous != path:
+        try:
+            await storage.delete_from_path(previous)
+        except Exception as e:
+            print(f"Announcements: could not remove the previous clip {previous}: {e}")
+
     entry.announcement_key = key
     entry.announcement_audio_path = path
     await db.commit()
