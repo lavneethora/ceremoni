@@ -24,7 +24,12 @@ from app.services.announcements import (
     get_ready_entry,
     start_generation,
 )
-from app.services.checkin_links import line_signature, seat_signature
+from app.services.checkin_links import (
+    line_signature,
+    make_card_code,
+    parse_card_code,
+    seat_signature,
+)
 from app.services.config_loader import get_session_options
 from app.services.roster_import import RosterImportError, clear_roster, import_roster
 from app.services.storage_cleanup import delete_orphans
@@ -359,6 +364,92 @@ async def clear_session_roster(
     require_admin(request)
     _require_roster_session(session_id)
     return await clear_roster(session, session_id)
+
+
+@router.get("/api/sessions/{session_id}/cards")
+async def session_cards(
+    session_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Every student on the roster, with a card code for those we can announce.
+
+    A student with no usable announcement still appears, without a code, so the
+    printed sheet covers the whole roster and the announcer reads those names
+    from the card instead of scanning them.
+    """
+    require_admin(request)
+    _require_roster_session(session_id)
+
+    loaded = await load_session_rows(session, session_id)
+    cards = []
+    for row in loaded.rows:
+        ready = _announcement(row, True) == "ready"
+        cards.append({
+            "student_id": row.student.id,
+            "typed_name": row.student.typed_name,
+            "major": row.major,
+            "honors_level": row.honors_level,
+            "ready": ready,
+            "code": make_card_code(session_id, row.student.id) if ready else None,
+        })
+    return {"session_id": session_id, "cards": cards}
+
+
+@router.post("/api/ceremony/scan")
+async def scan_card(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Announce whoever the scanned card names.
+
+    The session comes from the code rather than the caller, so this cannot fall
+    through to the legacy per student audio the way /play does when it is given
+    no session_id.
+    """
+    require_admin(request)
+    body = await request.json()
+    parsed = parse_card_code(body.get("code") if isinstance(body, dict) else None)
+    if parsed is None:
+        raise HTTPException(400, "That is not a valid Ceremoni card")
+    session_id, student_id = parsed
+
+    if not get_session_mode(session_id).roster:
+        raise HTTPException(400, "This card is not for a session that uses a roster")
+
+    try:
+        entry = await get_ready_entry(session, session_id, student_id)
+    except LookupError:
+        raise HTTPException(404, "This student is not on the roster for that ceremony")
+    except AnnouncementNotReady as e:
+        raise HTTPException(409, str(e))
+
+    already_played = entry.played
+    student = entry.student  # get_ready_entry eager loads this; seat_student does not
+
+    # seat_position doubles as the order actually announced. There are no
+    # migrations, so no column can be added for it, and seat_student already
+    # handles finding the next free number and losing a race for it.
+    position = entry.seat_position
+    if position is None:
+        try:
+            seated, _new = await seat_student(session, session_id, student_id)
+            position = seated.seat_position
+        except (SeatingConflict, LookupError) as e:
+            raise HTTPException(409, str(e))
+
+    if not already_played:
+        await set_played(session, session_id, student_id, True)
+
+    return {
+        "id": student.id,
+        "typed_name": student.typed_name,
+        "major": entry.major or student.major,
+        "honors_level": entry.honors_level,
+        "position": position,
+        "already_played": already_played,
+        "audio_url": f"/audio/announcement/{entry.id}",
+    }
 
 
 @router.post("/api/sessions/{session_id}/announcements/generate")
