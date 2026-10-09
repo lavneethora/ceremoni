@@ -19,6 +19,7 @@ const announceStatus = document.getElementById('announce-status');
 const importBtn = document.getElementById('import-btn');
 const generateBtn = document.getElementById('generate-btn');
 const clearRosterBtn = document.getElementById('clear-roster-btn');
+clearRosterBtn.hidden = true;
 const rosterFile = document.getElementById('roster-file');
 
 let statusTimer = null;
@@ -140,6 +141,10 @@ function createHeader(text) {
 }
 
 function renderStudents() {
+    // Nothing imported means nothing to clear, and a destructive button with
+    // nothing behind it is only a way to make a mistake
+    clearRosterBtn.hidden = !isRosterSession() || students.length === 0;
+
     studentList.replaceChildren();
     if (sortableInstance) {
         sortableInstance.destroy();
