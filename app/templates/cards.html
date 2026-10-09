@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ceremoni Student Cards</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
+    <link rel="stylesheet" href="/static/cards.css?v={{ static_version }}">
+</head>
+<body>
+    <div class="sheet-controls no-print">
+        <select id="session-select">
+            <option value="">Select session</option>
+        </select>
+        <button id="print-btn" class="btn" type="button">Print</button>
+        <span id="sheet-status" class="sheet-status"></span>
+    </div>
+
+    <div class="card-grid" id="card-grid"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"
+            integrity="sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k"
+            crossorigin="anonymous"></script>
+    <script src="/static/cards.js?v={{ static_version }}"></script>
+</body>
+</html>
