@@ -18,6 +18,7 @@ const rosterTools = document.getElementById('roster-tools');
 const announceStatus = document.getElementById('announce-status');
 const importBtn = document.getElementById('import-btn');
 const generateBtn = document.getElementById('generate-btn');
+const clearRosterBtn = document.getElementById('clear-roster-btn');
 const rosterFile = document.getElementById('roster-file');
 
 let statusTimer = null;
@@ -447,6 +448,33 @@ rosterFile.addEventListener('change', async () => {
     }
     importBtn.textContent = 'Import roster';
     importBtn.disabled = false;
+});
+
+clearRosterBtn.addEventListener('click', async () => {
+    if (!currentSessionId) return;
+    const count = students.length;
+    if (!confirm(
+        `Remove all ${count} student(s) from this session's roster?\n\n`
+        + 'Their recordings and pronunciations are kept, so re-importing finds them again. '
+        + 'Announcement clips are deleted and will need generating after the next import.'
+    )) return;
+
+    clearRosterBtn.disabled = true;
+    const previous = clearRosterBtn.textContent;
+    clearRosterBtn.textContent = 'Clearing...';
+    try {
+        const resp = await fetch(`/admin/api/sessions/${currentSessionId}/roster`, {method: 'DELETE'});
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            alert('Could not clear the roster: ' + (data.detail || 'Unknown error'));
+        } else {
+            await loadStudents();
+        }
+    } catch (e) {
+        alert('Clear roster error: ' + e.message);
+    }
+    clearRosterBtn.textContent = previous;
+    clearRosterBtn.disabled = false;
 });
 
 generateBtn.addEventListener('click', async () => {
