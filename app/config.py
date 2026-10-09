@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     elevenlabs_voice_id: str = ""
     elevenlabs_model: str = ""
     storage_path: str = "./storage"
-    tts_voice: str = "en-US-GuyNeural"
+    tts_voice: str = "en-US-SteffanMultilingualNeural"
     whisper_model: str = "base"
     # Models tried in order for audio to IPA, first usable answer wins. Pinned
     # to dated snapshots so OpenAI cannot move them under a running ceremony.
