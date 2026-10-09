@@ -37,15 +37,50 @@
                 <button type="button" class="checkin-tab" data-tab="seat">Seat QR</button>
             </nav>
 
-            <div class="checkin-columns" id="tab-tap">
-                <section class="checkin-panel">
-                    <div class="checkin-panel-head">
-                        <h2>Waiting</h2>
-                        <input type="search" id="checkin-search" placeholder="Search by name" autocomplete="off">
-                    </div>
-                    <div class="checkin-list" id="waiting-list"></div>
-                </section>
+            <div class="checkin-columns">
+                <div class="checkin-method">
+                    <section class="checkin-panel" id="tab-tap">
+                        <div class="checkin-panel-head">
+                            <h2>Waiting</h2>
+                            <input type="search" id="checkin-search" placeholder="Search by name" autocomplete="off">
+                        </div>
+                        <div class="checkin-list" id="waiting-list"></div>
+                    </section>
 
+                    <section class="checkin-qr" id="tab-line" hidden>
+                        <div class="checkin-switch">
+                            <span id="checkin-switch-label" class="checkin-switch-label"></span>
+                            <button id="checkin-switch-btn" class="btn" type="button"></button>
+                        </div>
+                        <p class="checkin-help">
+                            Post this code where students line up. Each student scans it, signs in with their TTU
+                            account and confirms. They are added to the announcing order in the order they confirm.
+                            Open check-in when the line forms and close it when the last student has arrived.
+                        </p>
+                        <div class="checkin-qr-code" id="line-qr"></div>
+                        <a class="checkin-qr-link" id="line-url" href="#" target="_blank" rel="noopener"></a>
+                    </section>
+
+                    <section class="checkin-qr" id="tab-seat" hidden>
+                        <div class="checkin-switch">
+                            <span id="checkin-switch-label-2" class="checkin-switch-label"></span>
+                            <button id="checkin-switch-btn-2" class="btn" type="button"></button>
+                        </div>
+                        <p class="checkin-help">
+                            Each seat gets its own code. A student sitting down scans their seat's code, signs in and
+                            confirms, and is placed at exactly that seat, no matter when they sit. Print a sheet for the
+                            range of seats you need, then tape one code to each seat.
+                        </p>
+                        <div class="checkin-seat-range">
+                            <label>From <input type="number" id="seat-sheet-from" min="1" value="1"></label>
+                            <label>To <input type="number" id="seat-sheet-to" min="1" value="50"></label>
+                            <a id="seat-sheet-link" class="btn btn-primary" target="_blank" rel="noopener">Open printable sheet</a>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Outside the tabs: an usher tapping names and an admin watching
+                     scans arrive both need to see the queue, so it stays put. -->
                 <section class="checkin-panel">
                     <div class="checkin-panel-head">
                         <h2>Seated, in announcing order</h2>
@@ -53,37 +88,6 @@
                     <div class="checkin-list" id="seated-list"></div>
                 </section>
             </div>
-
-            <section class="checkin-qr" id="tab-line" hidden>
-                <div class="checkin-switch">
-                    <span id="checkin-switch-label" class="checkin-switch-label"></span>
-                    <button id="checkin-switch-btn" class="btn" type="button"></button>
-                </div>
-                <p class="checkin-help">
-                    Post this code where students line up. Each student scans it, signs in with their TTU
-                    account and confirms. They are added to the announcing order in the order they confirm.
-                    Open check-in when the line forms and close it when the last student has arrived.
-                </p>
-                <div class="checkin-qr-code" id="line-qr"></div>
-                <a class="checkin-qr-link" id="line-url" href="#" target="_blank" rel="noopener"></a>
-            </section>
-
-            <section class="checkin-qr" id="tab-seat" hidden>
-                <div class="checkin-switch">
-                    <span id="checkin-switch-label-2" class="checkin-switch-label"></span>
-                    <button id="checkin-switch-btn-2" class="btn" type="button"></button>
-                </div>
-                <p class="checkin-help">
-                    Each seat gets its own code. A student sitting down scans their seat's code, signs in and
-                    confirms, and is placed at exactly that seat, no matter when they sit. Print a sheet for the
-                    range of seats you need, then tape one code to each seat.
-                </p>
-                <div class="checkin-seat-range">
-                    <label>From <input type="number" id="seat-sheet-from" min="1" value="1"></label>
-                    <label>To <input type="number" id="seat-sheet-to" min="1" value="50"></label>
-                    <a id="seat-sheet-link" class="btn btn-primary" target="_blank" rel="noopener">Open printable sheet</a>
-                </div>
-            </section>
         </div>
 
         <div class="checkin-toast" id="checkin-toast" hidden></div>
