@@ -26,7 +26,7 @@ from app.services.announcements import (
 )
 from app.services.checkin_links import line_signature, seat_signature
 from app.services.config_loader import get_session_options
-from app.services.roster_import import RosterImportError, import_roster
+from app.services.roster_import import RosterImportError, clear_roster, import_roster
 from app.services.storage_cleanup import delete_orphans
 from app.services.seating import (
     SeatingConflict,
@@ -347,6 +347,18 @@ async def import_session_roster(
         return await import_roster(session, session_id, data)
     except RosterImportError as e:
         raise HTTPException(400, str(e))
+
+
+@router.delete("/api/sessions/{session_id}/roster")
+async def clear_session_roster(
+    session_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Empty the roster, keeping the students, their recordings and their IPA."""
+    require_admin(request)
+    _require_roster_session(session_id)
+    return await clear_roster(session, session_id)
 
 
 @router.post("/api/sessions/{session_id}/announcements/generate")
