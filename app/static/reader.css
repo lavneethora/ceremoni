@@ -271,3 +271,127 @@
         min-width: 0;
     }
 }
+
+/* Scan mode: the announcer reads each student's card as they reach the stage */
+
+.reader-modes {
+    display: inline-flex;
+    gap: 0;
+    border: 1px solid #e5e5e5;
+}
+
+.reader-modes[hidden] {
+    display: none;
+}
+
+.reader-mode {
+    padding: 10px 18px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6b6b6b;
+    background: #fff;
+    border: none;
+    cursor: pointer;
+}
+
+.reader-mode.active {
+    color: #fff;
+    background: #1a1a1a;
+}
+
+.reader-scan {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 8px 0 24px;
+}
+
+.reader-scan[hidden],
+.reader-scan-live[hidden],
+.reader-scan-start[hidden],
+.reader-scan-current[hidden] {
+    display: none;
+}
+
+.reader-scan-start {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 48px 0;
+    text-align: center;
+    color: #6b6b6b;
+}
+
+.reader-scan-live {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+}
+
+.reader-scan-video {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    background: #1a1a1a;
+}
+
+.reader-scan-video video {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* A target to aim the card at, so the announcer is not guessing */
+.reader-scan-reticle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 55%;
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    pointer-events: none;
+}
+
+.reader-scan-current {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+    max-width: 100%;
+}
+
+.reader-scan-foot {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    color: #6b6b6b;
+    font-size: 13px;
+}
+
+#scan-recent {
+    width: 100%;
+    max-width: 420px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#scan-recent li {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 13px;
+}
+
+#scan-recent li:last-child {
+    border-bottom: none;
+}
