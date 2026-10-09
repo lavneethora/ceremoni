@@ -133,6 +133,16 @@
     border: 1px solid #e5e5e5;
 }
 
+/* Left column holds whichever check-in method is selected; the seated list
+   sits in the right column and never changes with the tabs. */
+.checkin-method {
+    min-width: 0;
+}
+
+.checkin-method .checkin-qr {
+    padding-top: 0;
+}
+
 .checkin-columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -271,7 +281,17 @@
         padding: 0 16px 48px;
     }
 
-    .checkin-columns {
+    /* Left column holds whichever check-in method is selected; the seated list
+   sits in the right column and never changes with the tabs. */
+.checkin-method {
+    min-width: 0;
+}
+
+.checkin-method .checkin-qr {
+    padding-top: 0;
+}
+
+.checkin-columns {
         grid-template-columns: 1fr;
         gap: 24px;
     }
