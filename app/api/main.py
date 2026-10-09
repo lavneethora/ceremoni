@@ -53,6 +53,27 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 templates = Jinja2Templates(directory=templates_dir)
 
 
+def _static_version() -> str:
+    """A token that changes whenever a stylesheet or script does.
+
+    Templates append it to every /static URL. Without it a browser keeps
+    serving the css and js it cached before the last deploy, which looks like
+    the deploy not having happened: the page is new, the behaviour is old, and
+    the only cure is knowing to hard refresh.
+    """
+    newest = 0.0
+    for root, _dirs, files in os.walk(static_dir):
+        for name in files:
+            try:
+                newest = max(newest, os.path.getmtime(os.path.join(root, name)))
+            except OSError:
+                continue
+    return str(int(newest))
+
+
+templates.env.globals["static_version"] = _static_version()
+
+
 @app.get("/admin/dashboard")
 async def dashboard(request: Request):
     user = require_admin(request)
