@@ -83,7 +83,9 @@
     border-color: #1a7f37;
 }
 
-.checkin-switch.open #checkin-switch-label {
+/* Both switches, not just the first one. Targeting the id meant the Seat QR
+   tab's label stayed black while the Line QR tab's went green. */
+.checkin-switch.open .checkin-switch-label {
     color: #1a7f37;
 }
 
