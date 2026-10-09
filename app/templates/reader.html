@@ -24,7 +24,40 @@
             <select id="session-select">
                 <option value="">Select session</option>
             </select>
+            <div class="reader-modes" id="reader-modes" hidden>
+                <button type="button" class="reader-mode active" data-mode="scan">Scan cards</button>
+                <button type="button" class="reader-mode" data-mode="queue">Play next</button>
+            </div>
         </div>
+
+        <section class="reader-scan" id="reader-scan" hidden>
+            <div class="reader-scan-start" id="scan-start">
+                <p>The camera reads each student's card and plays their announcement.</p>
+                <button class="reader-play-btn" id="scan-start-btn" type="button">Start scanning</button>
+            </div>
+
+            <div class="reader-scan-live" id="scan-live" hidden>
+                <div class="reader-scan-video">
+                    <video id="scan-video" playsinline muted></video>
+                    <div class="reader-scan-reticle"></div>
+                </div>
+
+                <div class="reader-scan-current" id="scan-current" hidden>
+                    <div class="reader-current-label" id="scan-position"></div>
+                    <div class="reader-current-name" id="scan-name"></div>
+                    <div class="reader-current-meta" id="scan-meta"></div>
+                </div>
+
+                <div class="reader-notice" id="scan-notice" hidden></div>
+
+                <div class="reader-scan-foot">
+                    <span id="scan-count"></span>
+                    <button class="btn btn-small" id="scan-stop-btn" type="button">Stop camera</button>
+                </div>
+
+                <ol class="reader-upcoming-list" id="scan-recent"></ol>
+            </div>
+        </section>
 
         <section class="reader-stage" id="reader-stage" hidden>
             <div class="reader-current" id="reader-current">
@@ -49,6 +82,9 @@
         <audio id="reader-audio" preload="auto"></audio>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"
+            integrity="sha384-b5Ya4Bq3qCyz39m2ISh+4DxjAIljdeFwK/BsXLuj9gugaNwAcj/ia15fxNZL9Nlx"
+            crossorigin="anonymous"></script>
     <script src="/static/reader.js?v={{ static_version }}"></script>
 </body>
 </html>
