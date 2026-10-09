@@ -96,6 +96,16 @@ header h1 {
     cursor: not-allowed;
 }
 
+.btn-danger {
+    color: #b42318;
+    border-color: #f0c2bd;
+}
+
+.btn-danger:hover {
+    background: #fef4f3;
+    border-color: #b42318;
+}
+
 .btn-small {
     padding: 4px 10px;
     font-size: 12px;
