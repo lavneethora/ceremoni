@@ -13,10 +13,11 @@ import io
 import re
 from collections import defaultdict
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import SessionEntry, Student
+from app.services.storage import storage
 
 
 class RosterImportError(Exception):
@@ -203,3 +204,33 @@ async def import_roster(db: AsyncSession, session_id: str, csv_bytes: bytes) -> 
         "duplicates": duplicates,
         "rejected": rejected,
     }
+
+
+async def clear_roster(db: AsyncSession, session_id: str) -> dict:
+    """Empty a session's roster, keeping the students themselves.
+
+    Removes who is on the roster, their honors level, their seat and their
+    announcement clip. Students, their recordings and their pronunciations are
+    deliberately untouched: a re-import has to find them again by R number, and
+    they are the expensive part to rebuild.
+
+    Announcements have to be generated again afterwards, because the clips
+    belonged to the entries that were just removed.
+    """
+    result = await db.execute(select(SessionEntry).where(SessionEntry.session_id == session_id))
+    entries = list(result.scalars().all())
+
+    removed_clips = 0
+    for entry in entries:
+        if not entry.announcement_audio_path:
+            continue
+        try:
+            if await storage.delete_from_path(entry.announcement_audio_path):
+                removed_clips += 1
+        except Exception as e:
+            print(f"Roster clear: could not remove {entry.announcement_audio_path}: {e}")
+
+    await db.execute(delete(SessionEntry).where(SessionEntry.session_id == session_id))
+    await db.commit()
+
+    return {"status": "ok", "removed": len(entries), "removed_clips": removed_clips}
