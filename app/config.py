@@ -10,7 +10,12 @@ class Settings(BaseSettings):
     elevenlabs_voice_id: str = ""
     elevenlabs_model: str = ""
     storage_path: str = "./storage"
-    tts_voice: str = "en-US-SteffanMultilingualNeural"
+    # Azure's multilingual voices handle non-English names far better than the
+    # older ones. Shortlisted by ear against the same recording: Derek chosen,
+    # Steffan the runner up (en-US-SteffanMultilingualNeural) if this is ever
+    # revisited. Changing this restamps every clip's filename, so a switch means
+    # regenerating the stored audio.
+    tts_voice: str = "en-US-DerekMultilingualNeural"
     whisper_model: str = "base"
     # Models tried in order for audio to IPA, first usable answer wins. Pinned
     # to dated snapshots so OpenAI cannot move them under a running ceremony.
