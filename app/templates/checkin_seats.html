@@ -6,8 +6,8 @@
     <title>Ceremoni Seat QR Sheet</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="/static/checkin_seats.css">
+    <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
+    <link rel="stylesheet" href="/static/checkin_seats.css?v={{ static_version }}">
 </head>
 <body>
     <div class="sheet-controls no-print">
@@ -23,6 +23,6 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"
             integrity="sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k"
             crossorigin="anonymous"></script>
-    <script src="/static/checkin_seats.js"></script>
+    <script src="/static/checkin_seats.js?v={{ static_version }}"></script>
 </body>
 </html>
