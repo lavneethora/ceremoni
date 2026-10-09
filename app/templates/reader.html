@@ -6,8 +6,8 @@
     <title>Ceremoni Reader</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="/static/reader.css">
+    <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
+    <link rel="stylesheet" href="/static/reader.css?v={{ static_version }}">
 </head>
 <body class="reader-body">
     <header class="reader-header">
@@ -49,6 +49,6 @@
         <audio id="reader-audio" preload="auto"></audio>
     </main>
 
-    <script src="/static/reader.js"></script>
+    <script src="/static/reader.js?v={{ static_version }}"></script>
 </body>
 </html>
