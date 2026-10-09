@@ -281,17 +281,7 @@
         padding: 0 16px 48px;
     }
 
-    /* Left column holds whichever check-in method is selected; the seated list
-   sits in the right column and never changes with the tabs. */
-.checkin-method {
-    min-width: 0;
-}
-
-.checkin-method .checkin-qr {
-    padding-top: 0;
-}
-
-.checkin-columns {
+    .checkin-columns {
         grid-template-columns: 1fr;
         gap: 24px;
     }
