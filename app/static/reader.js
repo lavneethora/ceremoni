@@ -418,7 +418,15 @@ async function announceCard(code) {
 }
 
 for (const btn of document.querySelectorAll('.reader-mode')) {
-    btn.addEventListener('click', () => setMode(btn.dataset.mode));
+    btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        setMode(mode);
+        // Scan mode is already selected by default, so clicking its tab used to
+        // do nothing at all and looked broken. Clicking it is also a gesture,
+        // which is what the audio element needs unlocking with, so start the
+        // camera here rather than making the announcer find a second button.
+        if (mode === 'scan' && currentSessionId && !stream) startScanning();
+    });
 }
 scanStartBtn.addEventListener('click', startScanning);
 scanStopBtn.addEventListener('click', stopScanning);
