@@ -48,6 +48,7 @@ async function init() {
     while (sessionSelect.options.length > 1) sessionSelect.remove(1);
 
     for (const event of events) {
+        if (!event.active) continue;  // retired ceremonies stay out of the picker
         for (const session of event.sessions) {
             if (session.order !== 'seating') continue;
             const opt = document.createElement('option');
