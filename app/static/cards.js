@@ -9,6 +9,7 @@ async function init() {
     const resp = await fetch('/admin/api/events');
     const events = await resp.json();
     for (const event of events) {
+        if (!event.active) continue;  // retired ceremonies stay out of the picker
         for (const session of event.sessions) {
             if (!session.roster) continue;
             const opt = document.createElement('option');
