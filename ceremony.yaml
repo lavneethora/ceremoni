@@ -3,8 +3,10 @@
 # After editing, restart the server or hit the "Reload Config" button.
 
 events:
+  # active: false keeps a ceremony's data and history but takes it out of the
+  # session pickers, so last year's events stop cluttering the live ones.
   - name: Spring 2026 Undergraduate
-    active: true
+    active: false
     sessions:
       - label: "Friday 9:00 AM"
         date: "2026-05-15"
@@ -41,7 +43,7 @@ events:
   #   roster: true    students come from an imported roster, not from colleges
   #   order: seating  announce only seated students, in seat order
   - name: Fall 2026
-    active: false
+    active: true
     sessions:
       - label: "Honors Medallion"
         date: "TBD"
