@@ -275,23 +275,40 @@ function renderRecent() {
         ? `${announced.length} announced` : 'Nobody announced yet';
 }
 
+// A moment of silence, so the unlock below has something real to play. Calling
+// play() on a source-less element never settles, which used to hang the whole
+// of startScanning before it ever reached the camera.
+const SILENCE = 'data:audio/wav;base64,UklGRiwAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgAAACAgICAgICAgA==';
+
+async function unlockAudio() {
+    // Runs inside the click that starts scanning, so a successful play here
+    // buys the gesture that every later decode-triggered play inherits.
+    // Raced against a timeout: an unlock that will not finish must never be
+    // the reason the camera does not open.
+    const attempt = (async () => {
+        try {
+            audio.muted = true;
+            audio.src = SILENCE;
+            await audio.play();
+            audio.pause();
+            audio.currentTime = 0;
+        } catch (e) {
+            // blocked or unsupported, the first scan may just need a tap
+        } finally {
+            audio.muted = false;
+            audio.removeAttribute('src');
+            audio.load();
+        }
+    })();
+    await Promise.race([attempt, new Promise(r => setTimeout(r, 400))]);
+}
+
 async function startScanning() {
     if (!currentSessionId) {
         showScanNotice('Pick a session first.');
         return;
     }
-    // This runs inside a click, so playing the (still empty) audio element here
-    // buys a user gesture for every later decode-triggered play. Without it the
-    // browser blocks autoplay and the failure is silent.
-    try {
-        audio.muted = true;
-        await audio.play().catch(() => {});
-        audio.pause();
-        audio.currentTime = 0;
-        audio.muted = false;
-    } catch (e) {
-        // not fatal, the first scan may just need a tap
-    }
+    await unlockAudio();
 
     try {
         stream = await navigator.mediaDevices.getUserMedia({
