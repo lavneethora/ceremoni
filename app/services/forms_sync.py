@@ -7,11 +7,23 @@ from app.db import async_session
 from app.models import Student, Recording
 from app.services.storage import storage
 
-# The Excel workbook name at the root of OneDrive
-WORKBOOK_NAME = "Ceremoni - Graduation Name Pronunciation.xlsx"
+from app.config import settings
 
-# The folder where Forms stores file uploads
-FORMS_FOLDER = "Ceremoni - Graduation Name Pronunciation"
+# The Excel workbook and upload folder belong to one Form, so both are settings:
+# pointing at a new Form is MS_WORKBOOK_NAME, MS_FORMS_FOLDER and MS_FORM_KEY.
+WORKBOOK_NAME = settings.ms_workbook_name
+FORMS_FOLDER = settings.ms_forms_folder
+
+
+def scoped_response_id(response_id: str) -> str:
+    """A response id that cannot be confused with another Form's.
+
+    Microsoft Forms numbers responses from 1 for every form, so a second form's
+    response 1 collides with the first form's response 1. The sync treats a
+    known id as already imported, so without scoping, every early submission to
+    a new form is silently skipped.
+    """
+    return f"{settings.ms_form_key}:{response_id}" if response_id else ""
 
 # Flexible column matching: if the header CONTAINS the key, it maps to the field
 COLUMN_PATTERNS = {
@@ -322,12 +334,16 @@ async def sync(access_token: str):
                 response_id = _get_row_value(row, col_index, "form_response_id")
                 if not response_id:
                     continue
+                # Stored scoped, so a new form's response 1 is not mistaken for
+                # the previous form's. Audio files are still matched on the raw
+                # number, which is what their filenames carry.
+                stored_id = scoped_response_id(response_id)
 
                 from sqlalchemy import select as sa_select
 
                 # Check if student exists
                 existing = await session.execute(
-                    sa_select(Student).where(Student.ms_form_response_id == response_id)
+                    sa_select(Student).where(Student.ms_form_response_id == stored_id)
                 )
                 existing_student = existing.scalar_one_or_none()
 
@@ -358,7 +374,7 @@ async def sync(access_token: str):
                         college=college,
                         major=_get_row_value(row, col_index, "major"),
                         phonetic_hint=_get_row_value(row, col_index, "phonetic_hint") or None,
-                        ms_form_response_id=response_id,
+                        ms_form_response_id=stored_id,
                     )
                     session.add(student)
                     await session.flush()
@@ -452,9 +468,12 @@ async def reprocess_single_student(access_token: str, student_id: str):
 
             # Find matching row in workbook
             target_row = None
+            raw_response_id = None
             for row in data_rows:
-                if _get_row_value(row, col_index, "form_response_id") == student.ms_form_response_id:
+                row_id = _get_row_value(row, col_index, "form_response_id")
+                if scoped_response_id(row_id) == student.ms_form_response_id:
                     target_row = row
+                    raw_response_id = row_id
                     break
 
             if target_row is None:
@@ -468,7 +487,7 @@ async def reprocess_single_student(access_token: str, student_id: str):
             print(f"Forms sync (reprocess): Voice cell for {student.typed_name}: '{voice_cell[:100] if voice_cell else '(empty)'}'")
 
             audio_content, audio_ext = await _fetch_audio_for_row(
-                client, headers, voice_cell, student.ms_form_response_id, audio_files, len(data_rows)
+                client, headers, voice_cell, raw_response_id, audio_files, len(data_rows)
             )
 
             if not audio_content:
