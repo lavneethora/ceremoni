@@ -36,6 +36,7 @@ async function init() {
     const events = await resp.json();
     while (sessionSelect.options.length > 1) sessionSelect.remove(1);
     for (const event of events) {
+        if (!event.active) continue;  // retired ceremonies stay out of the picker
         for (const session of event.sessions) {
             const opt = document.createElement('option');
             opt.value = session.id;
