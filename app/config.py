@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     ms_client_secret: str = ""
     ms_form_id: str = ""
     ms_form_owner: str = ""  # UPN/email of whoever created the form
+    # A new Form gets its own workbook and upload folder, so pointing at one is
+    # a config change rather than a code change.
+    ms_workbook_name: str = "Ceremoni - Graduation Name Pronunciation.xlsx"
+    ms_forms_folder: str = "Ceremoni - Graduation Name Pronunciation"
+    # Which form a response id belongs to. Forms number their responses from 1
+    # each, so without this a new form's response 1 looks like the old form's
+    # response 1 and every early submission is skipped as already synced.
+    ms_form_key: str = "form1"
 
     # Admin auth
     admin_emails: str = ""  # comma-separated
