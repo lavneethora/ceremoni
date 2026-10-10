@@ -19,6 +19,12 @@ body {
     font-size: 13px;
 }
 
+/* Pushed to the far side so it reads as leaving the page rather than as
+   another control for the sheet */
+.sheet-back {
+    margin-left: auto;
+}
+
 .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
