@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.db import init_db
+from app.db import async_session, init_db
 from app.api.routes import router
 from app.api.admin_routes import router as admin_router
 from app.api.checkin_public import router as checkin_router
@@ -108,6 +108,27 @@ async def checkin_seats(request: Request):
 async def root():
     from fastapi.responses import RedirectResponse
     return RedirectResponse("/admin")
+
+
+@app.get("/health")
+async def health():
+    """Liveness check that runs one real query, so it doubles as a keep-alive.
+
+    Supabase pauses a free project after seven days with no database activity,
+    and a request that only renders a page does not count: "/" redirects and
+    "/admin" returns a template, neither of which touches Postgres. This sends
+    SELECT 1 through the pool, which does count, and it fails loudly when the
+    database is unreachable, so a scheduled ping is a canary on the whole path
+    rather than only a way of keeping the timer from running out.
+
+    Unauthenticated on purpose. It reveals nothing beyond the fact that the
+    site is up, and anything that needs a login cannot serve as a keep-alive.
+    """
+    from sqlalchemy import text
+
+    async with async_session() as session:
+        await session.execute(text("SELECT 1"))
+    return {"ok": True}
 
 
 @app.get("/admin")
