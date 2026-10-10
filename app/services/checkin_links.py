@@ -62,3 +62,35 @@ def read_confirm_token(token: str) -> dict | None:
     except BadData:
         return None
     return data if isinstance(data, dict) else None
+
+
+# A card is printed weeks before the ceremony and has to survive a roster
+# re-import, so it signs the student rather than their roster entry: entries are
+# deleted and recreated by import_roster, student ids are not. Nothing here
+# expires, unlike the confirm token.
+CARD_PREFIX = "CRMNI1"
+
+
+def card_signature(session_id: str, student_id: str) -> str:
+    return _sign("student-card-v1", f"card:{session_id}:{student_id}")
+
+
+def make_card_code(session_id: str, student_id: str) -> str:
+    """What goes in the QR: deliberately not a URL.
+
+    A URL would mean a phone that scans a dropped card opens a page naming a
+    student. This shows an opaque string instead, and the Reader decodes it
+    locally without asking the network who it belongs to.
+    """
+    return f"{CARD_PREFIX}:{session_id}:{student_id}:{card_signature(session_id, student_id)}"
+
+
+def parse_card_code(code: str) -> tuple[str, str] | None:
+    """The (session_id, student_id) a card names, or None if it is not ours."""
+    parts = (code or "").strip().split(":")
+    if len(parts) != 4 or parts[0] != CARD_PREFIX:
+        return None
+    _prefix, session_id, student_id, signature = parts
+    if not hmac.compare_digest(card_signature(session_id, student_id), signature):
+        return None
+    return session_id, student_id

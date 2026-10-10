@@ -1,0 +1,109 @@
+/* One card per student, cut apart and handed out before the ceremony. */
+
+body {
+    background: #f7f7f7;
+}
+
+.sheet-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 32px;
+    background: #fff;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.sheet-status {
+    color: #6b6b6b;
+    font-size: 13px;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 16px;
+    padding: 24px 32px 48px;
+}
+
+.student-card-print {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 18px 16px;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    break-inside: avoid;
+    text-align: center;
+}
+
+.student-card-print .name {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.student-card-print .meta {
+    font-size: 12px;
+    color: #6b6b6b;
+    overflow-wrap: anywhere;
+}
+
+.student-card-print .honors {
+    font-size: 11px;
+    padding: 2px 8px;
+    border: 1px solid #4a90d9;
+    color: #4a90d9;
+    white-space: nowrap;
+}
+
+/* The QR needs clear white space around it or a camera struggles under
+   stage lighting, so the quiet zone is deliberately generous. */
+.student-card-print .qr {
+    width: 100%;
+    padding: 10px;
+    background: #fff;
+}
+
+.student-card-print .qr svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* A student with no usable announcement still gets a card, so nobody is
+   missing from the stack. The announcer reads this one aloud. */
+.student-card-print.no-audio {
+    border-style: dashed;
+    border-color: #9a6700;
+}
+
+.student-card-print .read-aloud {
+    font-size: 11px;
+    color: #9a6700;
+    border: 1px solid #9a6700;
+    padding: 4px 10px;
+    margin-top: 4px;
+}
+
+@media print {
+    .no-print {
+        display: none;
+    }
+
+    body {
+        background: #fff;
+    }
+
+    .card-grid {
+        padding: 0;
+        gap: 10px;
+    }
+
+    .student-card-print {
+        border-color: #999;
+    }
+}
