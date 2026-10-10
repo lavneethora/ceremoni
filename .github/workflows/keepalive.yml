@@ -1,0 +1,34 @@
+# Holds off Supabase's free plan pause, which lands after seven days with no
+# database activity. /health runs a real query, so this ping counts where a
+# page load would not.
+#
+# Daily rather than weekly on purpose: GitHub delays scheduled runs when its
+# queue is busy and drops them outright sometimes, so a weekly job has no
+# margin. Daily means six missed runs in a row before anything pauses.
+#
+# The URL lives in a repository secret because this repository is public.
+name: Keep alive
+
+on:
+  schedule:
+    # 09:17 UTC. An odd minute, since the top of the hour is the busiest slot
+    # in GitHub's scheduler and the most likely to be delayed.
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the health endpoint
+        env:
+          HEALTH_URL: ${{ secrets.HEALTH_URL }}
+        run: |
+          if [ -z "$HEALTH_URL" ]; then
+            echo "HEALTH_URL is not set, so there is nothing to ping."
+            echo "Add it under Settings > Secrets and variables > Actions."
+            exit 0
+          fi
+          # A cold Render instance can take about a minute to wake, and the
+          # first request is the one that pays for it, hence the long timeout.
+          curl --fail --silent --show-error --max-time 120 "$HEALTH_URL"
