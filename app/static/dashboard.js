@@ -36,6 +36,9 @@ async function init() {
     while (sessionSelect.options.length > 1) sessionSelect.remove(1);
 
     for (const event of events) {
+        // A retired ceremony keeps its data and stays reachable by id, it just
+        // stops cluttering the picker
+        if (!event.active) continue;
         for (const session of event.sessions) {
             sessionOptions[session.id] = {roster: session.roster, order: session.order};
             const opt = document.createElement('option');
