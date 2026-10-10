@@ -19,6 +19,7 @@ const announceStatus = document.getElementById('announce-status');
 const importBtn = document.getElementById('import-btn');
 const generateBtn = document.getElementById('generate-btn');
 const clearRosterBtn = document.getElementById('clear-roster-btn');
+const cardsLink = document.getElementById('cards-link');
 clearRosterBtn.hidden = true;
 const rosterFile = document.getElementById('roster-file');
 
@@ -144,6 +145,12 @@ function renderStudents() {
     // Nothing imported means nothing to clear, and a destructive button with
     // nothing behind it is only a way to make a mistake
     clearRosterBtn.hidden = !isRosterSession() || students.length === 0;
+
+    // Carry the chosen session through, so Cards opens on the right one
+    // instead of making you pick it again
+    cardsLink.href = isRosterSession() && currentSessionId
+        ? `/admin/cards?s=${currentSessionId}`
+        : '/admin/cards';
 
     studentList.replaceChildren();
     if (sortableInstance) {
