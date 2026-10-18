@@ -7,6 +7,11 @@
 # margin. Daily means six missed runs in a row before anything pauses.
 #
 # The URL lives in a repository secret because this repository is public.
+#
+# A missing secret fails this job rather than skipping it. The first version
+# exited 0 and printed a note instead, which produced eight green runs that
+# pinged nothing while the database quietly paused underneath. A canary that
+# cannot go off is worse than no canary, because it reads as reassurance.
 name: Keep alive
 
 on:
@@ -25,9 +30,10 @@ jobs:
           HEALTH_URL: ${{ secrets.HEALTH_URL }}
         run: |
           if [ -z "$HEALTH_URL" ]; then
-            echo "HEALTH_URL is not set, so there is nothing to ping."
-            echo "Add it under Settings > Secrets and variables > Actions."
-            exit 0
+            echo "HEALTH_URL is not set, so nothing was pinged and the"
+            echo "database is not being kept awake. Add it under"
+            echo "Settings > Secrets and variables > Actions."
+            exit 1
           fi
           # A cold Render instance can take about a minute to wake, and the
           # first request is the one that pays for it, hence the long timeout.
