@@ -37,7 +37,11 @@ if not _session_secret:
         "SESSION_SECRET (or MS_CLIENT_SECRET) must be set — refusing to start "
         "with a forgeable session key. Generate one: python -c 'import secrets; print(secrets.token_hex(32))'"
     )
-app.add_middleware(SessionMiddleware, secret_key=_session_secret)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=_session_secret,
+    https_only=settings.session_cookie_secure,
+)
 
 app.include_router(router)
 app.include_router(admin_router)
