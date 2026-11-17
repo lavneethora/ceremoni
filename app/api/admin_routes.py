@@ -10,6 +10,8 @@ from app.auth import (
     get_login_url,
     handle_callback,
     handle_student_callback,
+    forget_admin_token,
+    get_admin_token,
     require_admin,
     take_flow,
 )
@@ -124,6 +126,7 @@ async def auth_callback(request: Request):
 
 @router.get("/logout")
 async def logout(request: Request):
+    forget_admin_token(request)
     request.session.clear()
     return RedirectResponse("/admin")
 
@@ -203,7 +206,7 @@ async def reorder_students(
 async def reprocess_student(student_id: str, request: Request):
     """Re-download this student's audio from OneDrive and re-run the full pipeline."""
     require_admin(request)
-    access_token = request.session.get("user", {}).get("access_token")
+    access_token = get_admin_token(request)
     if not access_token:
         raise HTTPException(401, "No access token, please log out and log back in")
 
@@ -634,7 +637,7 @@ async def cleanup_storage(
 async def debug_excel(request: Request):
     """Show raw Excel data so we can debug voice recording URLs."""
     require_admin(request)
-    access_token = request.session.get("user", {}).get("access_token")
+    access_token = get_admin_token(request)
     if not access_token:
         raise HTTPException(401, "No access token")
 
@@ -668,7 +671,7 @@ async def debug_excel(request: Request):
 @router.post("/api/sync")
 async def sync_forms(request: Request):
     require_admin(request)
-    access_token = request.session.get("user", {}).get("access_token")
+    access_token = get_admin_token(request)
     if not access_token:
         raise HTTPException(401, "No access token — please log out and log back in")
 
