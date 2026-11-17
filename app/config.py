@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     # Admin auth
     admin_emails: str = ""  # comma-separated
     session_secret: str = ""  # signs admin session cookies; falls back to ms_client_secret
+    # Send the session cookie over HTTPS only. Set SESSION_COOKIE_SECURE=false for
+    # local development in a browser that will not keep a Secure cookie on http.
+    session_cookie_secure: bool = True
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
