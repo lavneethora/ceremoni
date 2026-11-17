@@ -1,3 +1,4 @@
+import secrets
 import time
 
 import msal
@@ -18,6 +19,42 @@ MODE_STUDENT = "student"
 FLOW_TTL_SECONDS = 600
 MAX_FLOWS = 500
 _auth_flows: dict[str, dict] = {}
+
+# Graph access tokens for signed-in admins, keyed by a random id that is the
+# only thing placed in the session cookie. The cookie is signed but not
+# encrypted, so a token stored in it could be read by anyone who saw the cookie.
+# Kept in memory: a restart means signing in again before the next Forms sync.
+MAX_ADMIN_TOKENS = 100
+_admin_tokens: dict[str, dict] = {}
+
+
+def _store_admin_token(access_token: str, expires_in: int) -> str:
+    now = time.time()
+    for key in [k for k, rec in _admin_tokens.items() if rec["expires_at"] <= now]:
+        del _admin_tokens[key]
+    while len(_admin_tokens) >= MAX_ADMIN_TOKENS:
+        del _admin_tokens[next(iter(_admin_tokens))]
+    token_id = secrets.token_urlsafe(32)
+    _admin_tokens[token_id] = {"access_token": access_token, "expires_at": now + expires_in}
+    return token_id
+
+
+def get_admin_token(request: Request) -> str | None:
+    """The signed-in admin's Graph token, or None if it has expired or the server restarted."""
+    token_id = (request.session.get("user") or {}).get("token_id")
+    record = _admin_tokens.get(token_id) if token_id else None
+    if record is None:
+        return None
+    if record["expires_at"] <= time.time():
+        _admin_tokens.pop(token_id, None)
+        return None
+    return record["access_token"]
+
+
+def forget_admin_token(request: Request) -> None:
+    token_id = (request.session.get("user") or {}).get("token_id")
+    if token_id:
+        _admin_tokens.pop(token_id, None)
 
 
 def _get_msal_app():
@@ -81,15 +118,16 @@ async def handle_callback(request: Request, record: dict) -> dict:
 
     email = user_info.get("mail", "") or user_info.get("userPrincipalName", "")
 
-    # Check if admin
+    # Check if admin. An empty list admits nobody: with ADMIN_EMAILS unset this
+    # used to let any account in the tenant through.
     admin_list = [e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()]
-    if admin_list and email.lower() not in admin_list:
+    if not email or email.lower() not in admin_list:
         raise HTTPException(403, "Not authorized as admin")
 
     return {
         "email": email,
         "name": user_info.get("displayName", ""),
-        "access_token": result["access_token"],
+        "token_id": _store_admin_token(result["access_token"], int(result.get("expires_in", 3600))),
     }
 
 
