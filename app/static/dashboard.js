@@ -386,7 +386,12 @@ syncBtn.addEventListener('click', async () => {
     syncBtn.disabled = true;
     syncBtn.textContent = 'Syncing...';
     try {
-        const resp = await fetch('/admin/api/sync', {method: 'POST'});
+        // Sync the Form this session collects from, not whichever one the
+        // environment happens to name.
+        const url = currentSessionId
+            ? `/admin/api/sync?s=${encodeURIComponent(currentSessionId)}`
+            : '/admin/api/sync';
+        const resp = await fetch(url, {method: 'POST'});
         const data = await resp.json();
         if (data.status === 'ok') {
             syncBtn.textContent = data.synced > 0 ? `Synced ${data.synced} new` : 'No new responses';
