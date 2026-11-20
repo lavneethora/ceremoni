@@ -42,6 +42,11 @@ events:
   # Session options:
   #   roster: true    students come from an imported roster, not from colleges
   #   order: seating  announce only seated students, in seat order
+  #   form:           which Microsoft Form this session syncs from. Omit it and
+  #                   the session uses the Form named in the environment.
+  #                   key scopes response ids, because Forms numbers responses
+  #                   from 1 for every form and two forms would collide.
+  #                   workbook and folder are matched exactly in OneDrive.
   - name: Fall 2026
     active: true
     sessions:
@@ -50,3 +55,16 @@ events:
         time: "TBD"
         roster: true
         order: seating
+
+      # Where the original Form's submissions live, so the Medallion session
+      # holds only real Medallion data. Same shape as the real session on
+      # purpose: a demo that behaves differently is not a rehearsal.
+      - label: "Demo"
+        date: "TBD"
+        time: "TBD"
+        roster: true
+        order: seating
+        form:
+          key: form1
+          workbook: "Ceremoni - Graduation Name Pronunciation.xlsx"
+          folder: "Ceremoni - Graduation Name Pronunciation"
