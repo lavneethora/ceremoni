@@ -1,5 +1,6 @@
 import base64
 import os
+from dataclasses import dataclass
 
 import httpx
 
@@ -9,13 +10,46 @@ from app.services.storage import storage
 
 from app.config import settings
 
-# The Excel workbook and upload folder belong to one Form, so both are settings:
-# pointing at a new Form is MS_WORKBOOK_NAME, MS_FORMS_FOLDER and MS_FORM_KEY.
-WORKBOOK_NAME = settings.ms_workbook_name
-FORMS_FOLDER = settings.ms_forms_folder
+@dataclass(frozen=True)
+class FormSource:
+    """One Microsoft Form: its response workbook, its upload folder, its key.
+
+    A ceremony that collects its own submissions gets its own Form, and each
+    Form brings its own workbook and folder. Sessions name theirs in
+    ceremony.yaml; anything that does not falls back to the environment.
+    """
+
+    key: str
+    workbook: str
+    folder: str
 
 
-def scoped_response_id(response_id: str) -> str:
+def form_source(options: dict | None = None) -> FormSource:
+    """A session's Form, defaulting field by field to the configured one."""
+    options = options or {}
+    return FormSource(
+        key=options.get("key") or settings.ms_form_key,
+        workbook=options.get("workbook") or settings.ms_workbook_name,
+        folder=options.get("folder") or settings.ms_forms_folder,
+    )
+
+
+def form_for_response_id(stored_id: str) -> FormSource:
+    """The Form a stored response id came from, read off its key prefix.
+
+    Reprocessing has to go back to the Form that student actually submitted
+    to, which is not necessarily the session being looked at.
+    """
+    from app.services.config_loader import session_forms
+
+    key = (stored_id or "").split(":", 1)[0]
+    for options in session_forms():
+        if options.get("key") == key:
+            return form_source(options)
+    return form_source()
+
+
+def scoped_response_id(response_id: str, key: str) -> str:
     """A response id that cannot be confused with another Form's.
 
     Microsoft Forms numbers responses from 1 for every form, so a second form's
@@ -23,7 +57,7 @@ def scoped_response_id(response_id: str) -> str:
     known id as already imported, so without scoping, every early submission to
     a new form is silently skipped.
     """
-    return f"{settings.ms_form_key}:{response_id}" if response_id else ""
+    return f"{key}:{response_id}" if response_id else ""
 
 # Flexible column matching: if the header CONTAINS the key, it maps to the field
 COLUMN_PATTERNS = {
@@ -60,10 +94,10 @@ def _match_columns(header_row):
     return col_index
 
 
-async def _find_workbook_id(client, headers):
-    """Find the Ceremoni workbook on OneDrive. Try exact name then prefix search."""
+async def _find_workbook_id(client, headers, workbook_name):
+    """Find this Form's workbook on OneDrive. Exact name, then an unambiguous search."""
     resp = await client.get(
-        f"https://graph.microsoft.com/v1.0/me/drive/root:/{WORKBOOK_NAME}",
+        f"https://graph.microsoft.com/v1.0/me/drive/root:/{workbook_name}",
         headers=headers,
     )
     if resp.status_code == 200:
@@ -74,11 +108,26 @@ async def _find_workbook_id(client, headers):
         headers=headers,
     )
     if resp.status_code == 200:
-        for item in resp.json().get("value", []):
-            name = item.get("name", "")
-            if name.lower().startswith("ceremoni") and name.lower().endswith(".xlsx"):
-                print(f"Forms sync: Found workbook by search: {name}")
-                return item["id"]
+        matches = [
+            item
+            for item in resp.json().get("value", [])
+            if item.get("name", "").lower().startswith("ceremoni")
+            and item.get("name", "").lower().endswith(".xlsx")
+        ]
+        # Only guess when there is nothing to confuse it with. A second Form's
+        # response workbook is also called "Ceremoni ....xlsx", so picking one
+        # of several means syncing a different ceremony's responses with no
+        # error anywhere to say so.
+        if len(matches) == 1:
+            print(f"Forms sync: Found workbook by search: {matches[0]['name']}")
+            return matches[0]["id"]
+        if matches:
+            names = ", ".join(m.get("name", "") for m in matches)
+            print(
+                f"Forms sync: no workbook named '{workbook_name}', and {len(matches)} "
+                f"could match ({names}). Refusing to guess. Set MS_WORKBOOK_NAME to "
+                "the exact file name."
+            )
 
     return None
 
@@ -103,7 +152,7 @@ async def _read_workbook_rows(client, headers, workbook_id):
     return header_row, data_rows, col_index
 
 
-async def _find_audio_files(client, headers):
+async def _find_audio_files(client, headers, folder_name):
     """Find all audio files in the Forms upload folder on OneDrive.
 
     Forms stores uploads at: /Apps/Microsoft Forms/{form_name}/Question/
@@ -122,15 +171,34 @@ async def _find_audio_files(client, headers):
             print(f"Forms sync: Could not list /Apps/Microsoft Forms/: {resp.status_code}")
             return audio_files
 
-        # Find our form folder
-        form_folder_id = None
-        for item in resp.json().get("value", []):
-            if "Ceremoni" in item.get("name", ""):
-                form_folder_id = item["id"]
-                break
+        # Find this Form's upload folder by its exact name. Matching on
+        # "Ceremoni" alone was fine with one Form and is not any more: a second
+        # Form's folder contains it too, and taking whichever Graph listed
+        # first would feed one ceremony the other ceremony's recordings.
+        folders = [i for i in resp.json().get("value", []) if i.get("folder")]
+        form_folder_id = next(
+            (i["id"] for i in folders if i.get("name", "") == folder_name), None
+        )
 
         if not form_folder_id:
-            print("Forms sync: Could not find Ceremoni form folder in OneDrive")
+            near = [i for i in folders if "ceremoni" in i.get("name", "").lower()]
+            if len(near) == 1:
+                print(
+                    f"Forms sync: no folder named '{folder_name}', "
+                    f"using the only candidate: {near[0].get('name', '')}"
+                )
+                form_folder_id = near[0]["id"]
+            elif near:
+                names = ", ".join(i.get("name", "") for i in near)
+                print(
+                    f"Forms sync: no folder named '{folder_name}', and {len(near)} "
+                    f"could match ({names}). Refusing to guess which Form's "
+                    "recordings to use. Set MS_folder_name to the exact name."
+                )
+                return audio_files
+
+        if not form_folder_id:
+            print(f"Forms sync: no upload folder named '{folder_name}' in OneDrive")
             return audio_files
 
         # List children of form folder (looking for Question subfolder)
@@ -302,14 +370,19 @@ def _get_row_value(row, col_index, key):
     return ""
 
 
-async def sync(access_token: str):
-    """Sync form responses using the admin's delegated OAuth token."""
+async def sync(access_token: str, form: dict | None = None):
+    """Sync one Form's responses using the admin's delegated OAuth token.
+
+    `form` is the selected session's form options from ceremony.yaml, so
+    syncing the Medallion session cannot reach into the demo Form's data.
+    """
+    src = form_source(form)
     headers = {"Authorization": f"Bearer {access_token}"}
 
     async with httpx.AsyncClient(timeout=60) as client:
-        workbook_id = await _find_workbook_id(client, headers)
+        workbook_id = await _find_workbook_id(client, headers, src.workbook)
         if not workbook_id:
-            return {"status": "error", "message": "Could not find Ceremoni workbook on OneDrive"}
+            return {"status": "error", "message": f"Could not find workbook '{src.workbook}' on OneDrive"}
 
         try:
             _, data_rows, col_index = await _read_workbook_rows(client, headers, workbook_id)
@@ -322,7 +395,7 @@ async def sync(access_token: str):
         if "name" not in col_index:
             return {"status": "error", "message": "Could not find name column in workbook headers"}
 
-        audio_files = await _find_audio_files(client, headers)
+        audio_files = await _find_audio_files(client, headers, src.folder)
 
         synced = 0
         skipped = 0
@@ -337,7 +410,7 @@ async def sync(access_token: str):
                 # Stored scoped, so a new form's response 1 is not mistaken for
                 # the previous form's. Audio files are still matched on the raw
                 # number, which is what their filenames carry.
-                stored_id = scoped_response_id(response_id)
+                stored_id = scoped_response_id(response_id, src.key)
 
                 from sqlalchemy import select as sa_select
 
@@ -442,10 +515,21 @@ async def reprocess_single_student(access_token: str, student_id: str):
     """Delete a student's existing recording and re-run the full download + pipeline."""
     headers = {"Authorization": f"Bearer {access_token}"}
 
+    # Which Form to go back to is decided by the student, not by whichever
+    # session happens to be on screen: their stored response id carries the
+    # key of the Form they actually submitted to.
+    async with async_session() as lookup:
+        student = await lookup.get(Student, student_id)
+        if not student:
+            return {"status": "error", "message": "Student not found"}
+        if not student.ms_form_response_id:
+            return {"status": "error", "message": f"Student {student.typed_name} has no form response ID"}
+        src = form_for_response_id(student.ms_form_response_id)
+
     async with httpx.AsyncClient(timeout=60) as client:
-        workbook_id = await _find_workbook_id(client, headers)
+        workbook_id = await _find_workbook_id(client, headers, src.workbook)
         if not workbook_id:
-            return {"status": "error", "message": "Could not find Ceremoni workbook on OneDrive"}
+            return {"status": "error", "message": f"Could not find workbook '{src.workbook}' on OneDrive"}
 
         try:
             _, data_rows, col_index = await _read_workbook_rows(client, headers, workbook_id)
@@ -471,7 +555,7 @@ async def reprocess_single_student(access_token: str, student_id: str):
             raw_response_id = None
             for row in data_rows:
                 row_id = _get_row_value(row, col_index, "form_response_id")
-                if scoped_response_id(row_id) == student.ms_form_response_id:
+                if scoped_response_id(row_id, src.key) == student.ms_form_response_id:
                     target_row = row
                     raw_response_id = row_id
                     break
@@ -482,7 +566,7 @@ async def reprocess_single_student(access_token: str, student_id: str):
             # Delete existing recordings so the sync path treats this as fresh
             await _delete_recordings_for_student(session, student)
 
-            audio_files = await _find_audio_files(client, headers)
+            audio_files = await _find_audio_files(client, headers, src.folder)
             voice_cell = _get_row_value(target_row, col_index, "voice_recording")
             print(f"Forms sync (reprocess): Voice cell for {student.typed_name}: '{voice_cell[:100] if voice_cell else '(empty)'}'")
 
