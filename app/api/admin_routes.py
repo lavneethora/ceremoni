@@ -669,15 +669,19 @@ async def debug_excel(request: Request):
 # --- Forms Sync ---
 
 @router.post("/api/sync")
-async def sync_forms(request: Request):
+async def sync_forms(request: Request, s: str | None = None):
     require_admin(request)
     access_token = get_admin_token(request)
     if not access_token:
         raise HTTPException(401, "No access token — please log out and log back in")
 
+    # Each session names the Form it collects from, so syncing while the
+    # Medallion session is selected cannot pull the demo Form's responses.
+    form = get_session_options(s)["form"] if s else None
+
     from app.services.forms_sync import sync
     try:
-        result = await sync(access_token)
+        result = await sync(access_token, form)
         return result
     except Exception as e:
         import traceback
