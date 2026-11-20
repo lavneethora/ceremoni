@@ -30,12 +30,37 @@ _session_options: dict[str, dict] = {}
 
 
 def get_session_options(session_id: str) -> dict:
-    """Per-session YAML options ("roster", "order"), rebuilt on every config load."""
-    return _session_options.get(session_id, {"roster": False, "order": None})
+    """Per-session YAML options ("roster", "order", "form"), rebuilt on every load."""
+    return _session_options.get(session_id, {"roster": False, "order": None, "form": None})
+
+
+def session_forms() -> list[dict]:
+    """Every Form named by a session, for finding one by its key."""
+    return [o["form"] for o in _session_options.values() if o.get("form")]
+
+
+def _form_options(session_data: dict) -> dict | None:
+    """Which Microsoft Form this session syncs from, or None for the default.
+
+    A ceremony that collects its own submissions gets its own Form, which means
+    its own response workbook and its own upload folder. Sessions that say
+    nothing here keep using the Form named in the environment, so adding a
+    second one is a YAML change rather than a redeploy.
+    """
+    form = session_data.get("form")
+    if not form:
+        return None
+    return {
+        "key": form.get("key"),
+        "workbook": form.get("workbook"),
+        "folder": form.get("folder"),
+    }
 
 
 def _validate(config: dict) -> str | None:
     seen_events = set()
+    # key -> (workbook, folder), so the same key never names two different Forms
+    forms_by_key: dict[str, tuple] = {}
     for event_data in config["events"]:
         name = event_data.get("name")
         if not name:
@@ -54,6 +79,24 @@ def _validate(config: dict) -> str | None:
             seen_labels.add(label)
             if session_data.get("order") not in VALID_ORDERS:
                 return f"Session '{label}' has an invalid order (allowed: seating)"
+
+            form = session_data.get("form")
+            if form is not None:
+                missing = [f for f in ("key", "workbook", "folder") if not form.get(f)]
+                if missing:
+                    return (
+                        f"Session '{label}' has a form without {', '.join(missing)}. "
+                        "All three are needed: the key scopes response ids, and the "
+                        "workbook and folder are matched exactly in OneDrive."
+                    )
+                shape = (form["workbook"], form["folder"])
+                if forms_by_key.setdefault(form["key"], shape) != shape:
+                    return (
+                        f"Session '{label}' reuses form key '{form['key']}' for a "
+                        "different workbook or folder. Response ids are numbered from "
+                        "1 per form and scoped by this key, so two forms sharing one "
+                        "key would silently skip each other's submissions."
+                    )
     return None
 
 
@@ -131,6 +174,7 @@ async def load_ceremony_config():
                 options[ceremony_session.id] = {
                     "roster": bool(session_data.get("roster", False)),
                     "order": session_data.get("order"),
+                    "form": _form_options(session_data),
                 }
 
         stale = await session.execute(
