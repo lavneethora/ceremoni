@@ -63,6 +63,10 @@ events:
         date: "TBD"
         time: "TBD"
         roster: true
+        # enroll: form means syncing puts everyone who submitted onto this
+        # roster, so there is no CSV to import. Only the real ceremony takes
+        # a roster from the Honors College.
+        enroll: form
         order: seating
         form:
           key: form1
