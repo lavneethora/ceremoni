@@ -57,6 +57,10 @@ events:
         time: "TBD"
         roster: true
         order: seating
+        # An honors ceremony announces a distinction for everyone who walks,
+        # so a student missing one gets no clip and is listed, rather than a
+        # clip that sounds fine with the distinction quietly left out.
+        requires: [major, honors]
         form:
           key: medallion
           workbook: "Ceremoni - Honors Medallion Ceremony Fall 2026.xlsx"
