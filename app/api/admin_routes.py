@@ -682,11 +682,12 @@ async def sync_forms(request: Request, s: str | None = None):
     # after a session is renamed.
     if s is not None and not known_session(s):
         raise HTTPException(404, "Unknown session. Reload the page and try again.")
-    form = get_session_options(s)["form"] if s else None
+    options = get_session_options(s) if s else {}
+    form = options.get("form")
 
     from app.services.forms_sync import sync
     try:
-        result = await sync(access_token, form)
+        result = await sync(access_token, form, s, options.get("enroll"))
         return result
     except Exception as e:
         import traceback
