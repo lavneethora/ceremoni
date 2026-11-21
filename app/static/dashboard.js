@@ -229,7 +229,7 @@ function renderStudents() {
         if (roster && s.has_recording === false) {
             const tag = document.createElement('span');
             tag.className = 'no-recording';
-            tag.title = 'No voice recording, announced with the plain voice';
+            tag.title = 'No voice recording, so no announcement is produced';
             tag.textContent = 'No recording';
             name.appendChild(tag);
         }
@@ -250,6 +250,24 @@ function renderStudents() {
         }
         status.className = 'status ' + statusClass;
         status.textContent = statusText;
+
+        // Checking a name before the ceremony has nothing to do with seating
+        // or the queue: it plays the clip and changes nothing.
+        const previewBtn = document.createElement('button');
+        previewBtn.className = 'btn-icon preview-btn';
+        previewBtn.type = 'button';
+        previewBtn.textContent = '\u25B6';
+        if (s.entry_id && s.announcement === 'ready') {
+            previewBtn.title = 'Play this announcement to check it';
+            previewBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                audioPlayer.src = `/audio/announcement/${s.entry_id}?t=${Date.now()}`;
+                audioPlayer.play().catch(err => alert('Could not play: ' + err.message));
+            });
+        } else {
+            previewBtn.disabled = true;
+            previewBtn.title = 'Generate announcements first';
+        }
 
         const reprocessBtn = document.createElement('button');
         reprocessBtn.className = 'btn-icon reprocess-btn';
@@ -292,6 +310,7 @@ function renderStudents() {
             honors.textContent = s.honors_level === 'highest_honors' ? 'Highest honors' : 'Honors';
             row.appendChild(honors);
         }
+        row.appendChild(previewBtn);
         row.appendChild(reprocessBtn);
         row.appendChild(status);
         (seating && !unseated ? seatedBox : studentList).appendChild(row);
