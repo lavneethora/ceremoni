@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.db import async_session
-from app.models import Student, Recording
+from app.models import Recording, SessionEntry, Student
 from app.services.storage import storage
 
 from app.config import settings
@@ -173,7 +173,10 @@ async def _find_audio_files(client, headers, folder_name):
         )
 
         if not form_folder_id:
-            seen = ", ".join(i.get("name", "") for i in folders) or "none"
+            # Only the plausible ones: enough to spot a typo, without
+            # printing every folder in the admin's drive.
+            near = [i.get("name", "") for i in folders if "ceremoni" in i.get("name", "").lower()]
+            seen = ", ".join(near) or f"{len(folders)} other folders"
             print(
                 f"Forms sync: no upload folder named '{folder_name}' under "
                 f"/Apps/Microsoft Forms/ (found: {seen}). A Form has no folder "
@@ -350,11 +353,47 @@ def _get_row_value(row, col_index, key):
     return ""
 
 
-async def sync(access_token: str, form: dict | None = None):
+async def _enroll_from_form(session, session_id: str, student_ids: set) -> int:
+    """Put everyone this Form imported onto the session's roster.
+
+    A session that collects its own submissions has no separate roster to
+    import: whoever submitted is who walks. Existing entries are left alone,
+    so a re-sync never wipes honors or a seat already set on one.
+    """
+    from sqlalchemy import select as sa_select
+
+    if not session_id or not student_ids:
+        return 0
+
+    already = set(
+        (
+            await session.execute(
+                sa_select(SessionEntry.student_id).where(SessionEntry.session_id == session_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    added = 0
+    for student_id in student_ids - already:
+        session.add(SessionEntry(session_id=session_id, student_id=student_id))
+        added += 1
+    return added
+
+
+async def sync(
+    access_token: str,
+    form: dict | None = None,
+    session_id: str | None = None,
+    enroll: str | None = None,
+):
     """Sync one Form's responses using the admin's delegated OAuth token.
 
     `form` is the selected session's form options from ceremony.yaml, so
     syncing the Medallion session cannot reach into the demo Form's data.
+    With enroll="form", everyone this Form imported is put on that
+    session's roster, for a session whose roster is simply whoever
+    submitted rather than a list someone hands you.
     """
     src = form_source(form)
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -379,6 +418,7 @@ async def sync(access_token: str, form: dict | None = None):
 
         synced = 0
         skipped = 0
+        enroll_ids: set[str] = set()
         audio_matched = 0
         audio_failed = 0
 
@@ -408,6 +448,8 @@ async def sync(access_token: str, form: dict | None = None):
 
                     if has_recording:
                         skipped += 1
+                        # Already imported, but still one of this Form's people
+                        enroll_ids.add(existing_student.id)
                         continue
 
                     student = existing_student
@@ -433,6 +475,8 @@ async def sync(access_token: str, form: dict | None = None):
                     await session.flush()
                     synced += 1
 
+                enroll_ids.add(student.id)
+
                 voice_cell = _get_row_value(row, col_index, "voice_recording")
                 print(f"Forms sync: Voice cell for {student.typed_name}: '{voice_cell[:100] if voice_cell else '(empty)'}'")
 
@@ -453,11 +497,16 @@ async def sync(access_token: str, form: dict | None = None):
                         audio_failed += 1
                         print(f"Forms sync: Could not download audio for {student.typed_name}")
 
+            added_to_roster = 0
+            if enroll == "form":
+                added_to_roster = await _enroll_from_form(session, session_id, enroll_ids)
+
             await session.commit()
 
         return {
             "status": "ok",
             "synced": synced,
+            "added_to_roster": added_to_roster,
             "skipped": skipped,
             "audio_matched": audio_matched,
             "audio_failed": audio_failed,
