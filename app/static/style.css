@@ -158,7 +158,9 @@ header h1 {
 select {
     font-family: inherit;
     font-size: 13px;
-    padding: 8px 12px;
+    /* Extra room on the right so the native arrow is not crowded into the
+       border. The browser insets it by padding-right. */
+    padding: 8px 16px 8px 12px;
     border: 1px solid #e5e5e5;
     background: #fff;
     color: #1a1a1a;
@@ -356,4 +358,10 @@ select:focus {
 
 .sortable-ghost {
     opacity: 0.3;
+}
+
+/* Checking one name before the ceremony, separate from the queue */
+.preview-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
 }
