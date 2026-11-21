@@ -117,6 +117,18 @@ async def get_ready_entry(db: AsyncSession, session_id: str, student_id: str) ->
         raise AnnouncementNotReady(
             f"The announcement for {entry.student.typed_name} is {reason}. Generate announcements first."
         )
+
+    # Checked again at the moment of announcing, not only when the clip was
+    # made. A clip generated before this session required a distinction, or
+    # before the rule existed, would otherwise still be read out with the
+    # distinction missing, which is the one thing this must not do.
+    gaps = missing_required(entry, entry.student, get_session_options(session_id)["requires"])
+    if gaps:
+        raise AnnouncementNotReady(
+            f"{entry.student.typed_name} needs "
+            + " and ".join(FIELD_LABELS[g] for g in gaps)
+            + " on the roster before they can be announced."
+        )
     return entry
 
 
