@@ -40,6 +40,15 @@ def get_session_options(session_id: str) -> dict:
     )
 
 
+def any_sessions_loaded() -> bool:
+    """Whether ceremony.yaml loaded at all.
+
+    A config that failed to validate leaves this empty, and then every
+    session looks unknown, which is a different problem from a stale id.
+    """
+    return bool(_session_options)
+
+
 def known_session(session_id: str) -> bool:
     """Whether this id belongs to a session the loaded config knows about.
 
