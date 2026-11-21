@@ -50,11 +50,17 @@ events:
   - name: Fall 2026
     active: true
     sessions:
+      # No enroll here on purpose: who walks comes from the Honors College's
+      # roster, not from who happened to submit the form.
       - label: "Honors Medallion"
         date: "TBD"
         time: "TBD"
         roster: true
         order: seating
+        form:
+          key: medallion
+          workbook: "Ceremoni - Honors Medallion Ceremony Fall 2026.xlsx"
+          folder: "Ceremoni - Honors Medallion Ceremony Fall 2026"
 
       # Where the original Form's submissions live, so the Medallion session
       # holds only real Medallion data. Same shape as the real session on
