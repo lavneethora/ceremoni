@@ -453,14 +453,25 @@ async def sync(
                 # response. Keep the scoped one, and never rename a bare id on
                 # top of an id another row already holds.
                 existing_student = next(
-                    (s for s in found if s.ms_form_response_id == stored_id),
-                    found[0] if found else None,
+                    (s for s in found if s.ms_form_response_id == stored_id), None
                 )
-                if len(found) > 1:
-                    others = [s.typed_name for s in found if s is not existing_student]
+                if existing_student is None and len(found) > 1:
+                    # Several rows, none of them the scoped one, so there is no
+                    # principled way to say whose recording this is. Picking
+                    # one would attach it to the wrong student in silence.
+                    names = ", ".join(s.typed_name for s in found)
                     print(
-                        f"Forms sync: response {response_id} matches {len(found)} students; "
-                        f"keeping {existing_student.typed_name}, leaving {', '.join(others)}"
+                        f"Forms sync: response {response_id} matches {len(found)} students "
+                        f"({names}) and none holds {stored_id}. Skipping, resolve by hand."
+                    )
+                    continue
+                if existing_student is None:
+                    existing_student = found[0] if found else None
+                elif len(found) > 1:
+                    others = ", ".join(s.typed_name for s in found if s is not existing_student)
+                    print(
+                        f"Forms sync: response {response_id} also matches {others}; "
+                        f"keeping the scoped row and leaving the rest alone"
                     )
 
                 if existing_student and existing_student.ms_form_response_id != stored_id:
