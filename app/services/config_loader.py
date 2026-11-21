@@ -26,13 +26,16 @@ from app.models import (
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "ceremony.yaml")
 
 VALID_ORDERS = (None, "seating")
+VALID_ENROLL = (None, "form")
 
 _session_options: dict[str, dict] = {}
 
 
 def get_session_options(session_id: str) -> dict:
     """Per-session YAML options ("roster", "order", "form"), rebuilt on every load."""
-    return _session_options.get(session_id, {"roster": False, "order": None, "form": None})
+    return _session_options.get(
+        session_id, {"roster": False, "order": None, "form": None, "enroll": None}
+    )
 
 
 def known_session(session_id: str) -> bool:
@@ -95,6 +98,15 @@ def _validate(config: dict) -> str | None:
             seen_labels.add(label)
             if session_data.get("order") not in VALID_ORDERS:
                 return f"Session '{label}' has an invalid order (allowed: seating)"
+
+            enroll = session_data.get("enroll")
+            if enroll not in VALID_ENROLL:
+                return f"Session '{label}' has an invalid enroll (allowed: form)"
+            if enroll == "form" and not session_data.get("form"):
+                return (
+                    f"Session '{label}' enrolls from its form but names no form. "
+                    "Without one there is nothing to decide who submitted."
+                )
 
             form = session_data.get("form")
             if form is not None:
@@ -199,6 +211,7 @@ async def load_ceremony_config():
                     "roster": bool(session_data.get("roster", False)),
                     "order": session_data.get("order"),
                     "form": _form_options(session_data),
+                    "enroll": session_data.get("enroll"),
                 }
 
         stale = await session.execute(
