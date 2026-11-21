@@ -42,10 +42,17 @@ def form_for_response_id(stored_id: str) -> FormSource:
     """
     from app.services.config_loader import session_forms
 
-    key = (stored_id or "").split(":", 1)[0]
+    # Ids stored before Forms were named per session carry no key at all, and
+    # every one of those came from the Form the environment still points at.
+    if ":" not in (stored_id or ""):
+        return form_source()
+
+    key = stored_id.split(":", 1)[0]
     for options in session_forms():
         if options.get("key") == key:
             return form_source(options)
+
+    print(f"Forms sync: no session declares form key '{key}', using the default")
     return form_source()
 
 
@@ -95,7 +102,16 @@ def _match_columns(header_row):
 
 
 async def _find_workbook_id(client, headers, workbook_name):
-    """Find this Form's workbook on OneDrive. Exact name, then an unambiguous search."""
+    """This Form's workbook on OneDrive, matched by name only, or None.
+
+    There is deliberately no search fallback. It used to take any
+    "ceremoni*.xlsx" in the drive, which was harmless with one Form and is
+    not with two: the obvious way for an exact match to fail is a workbook
+    that does not exist yet, and the only other candidate is then the other
+    ceremony's. Syncing a name-shaped guess is how the wrong students arrive
+    in the right session with nothing in the logs to say so. A missing
+    workbook is an error worth seeing.
+    """
     resp = await client.get(
         f"https://graph.microsoft.com/v1.0/me/drive/root:/{workbook_name}",
         headers=headers,
@@ -103,32 +119,7 @@ async def _find_workbook_id(client, headers, workbook_name):
     if resp.status_code == 200:
         return resp.json()["id"]
 
-    resp = await client.get(
-        "https://graph.microsoft.com/v1.0/me/drive/root/children?$top=200",
-        headers=headers,
-    )
-    if resp.status_code == 200:
-        matches = [
-            item
-            for item in resp.json().get("value", [])
-            if item.get("name", "").lower().startswith("ceremoni")
-            and item.get("name", "").lower().endswith(".xlsx")
-        ]
-        # Only guess when there is nothing to confuse it with. A second Form's
-        # response workbook is also called "Ceremoni ....xlsx", so picking one
-        # of several means syncing a different ceremony's responses with no
-        # error anywhere to say so.
-        if len(matches) == 1:
-            print(f"Forms sync: Found workbook by search: {matches[0]['name']}")
-            return matches[0]["id"]
-        if matches:
-            names = ", ".join(m.get("name", "") for m in matches)
-            print(
-                f"Forms sync: no workbook named '{workbook_name}', and {len(matches)} "
-                f"could match ({names}). Refusing to guess. Set MS_WORKBOOK_NAME to "
-                "the exact file name."
-            )
-
+    print(f"Forms sync: no workbook named '{workbook_name}' in OneDrive")
     return None
 
 
@@ -171,34 +162,23 @@ async def _find_audio_files(client, headers, folder_name):
             print(f"Forms sync: Could not list /Apps/Microsoft Forms/: {resp.status_code}")
             return audio_files
 
-        # Find this Form's upload folder by its exact name. Matching on
-        # "Ceremoni" alone was fine with one Form and is not any more: a second
-        # Form's folder contains it too, and taking whichever Graph listed
-        # first would feed one ceremony the other ceremony's recordings.
+        # This Form's upload folder, matched by name only. Matching on
+        # "Ceremoni" alone was fine with one Form and is not any more: a
+        # second Form's folder contains it too, and a near-miss would feed one
+        # ceremony the other ceremony's recordings. Nothing is guessed, for
+        # the same reason as the workbook above.
         folders = [i for i in resp.json().get("value", []) if i.get("folder")]
         form_folder_id = next(
             (i["id"] for i in folders if i.get("name", "") == folder_name), None
         )
 
         if not form_folder_id:
-            near = [i for i in folders if "ceremoni" in i.get("name", "").lower()]
-            if len(near) == 1:
-                print(
-                    f"Forms sync: no folder named '{folder_name}', "
-                    f"using the only candidate: {near[0].get('name', '')}"
-                )
-                form_folder_id = near[0]["id"]
-            elif near:
-                names = ", ".join(i.get("name", "") for i in near)
-                print(
-                    f"Forms sync: no folder named '{folder_name}', and {len(near)} "
-                    f"could match ({names}). Refusing to guess which Form's "
-                    "recordings to use. Set MS_folder_name to the exact name."
-                )
-                return audio_files
-
-        if not form_folder_id:
-            print(f"Forms sync: no upload folder named '{folder_name}' in OneDrive")
+            seen = ", ".join(i.get("name", "") for i in folders) or "none"
+            print(
+                f"Forms sync: no upload folder named '{folder_name}' under "
+                f"/Apps/Microsoft Forms/ (found: {seen}). A Form has no folder "
+                "until someone submits a file to it."
+            )
             return audio_files
 
         # List children of form folder (looking for Question subfolder)
