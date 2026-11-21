@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
+from app.services.config_loader import get_session_options
 from app.db import async_session
 from app.models import SessionEntry, Student
 from app.services import tts_generator
@@ -61,6 +62,28 @@ def announcement_key(entry: SessionEntry, student: Student) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
+FIELD_LABELS = {"major": "a major", "honors": "an honors level"}
+
+
+def missing_required(entry: SessionEntry, student: Student, required) -> list[str]:
+    """Which parts this session insists on that the entry does not have.
+
+    An announcement with a gap in it still sounds perfectly fine, which is the
+    problem: a Medallion student read out without their distinction is wrong
+    in a way nobody notices until it has already happened. So a session can
+    say the parts are not optional, and an entry missing one is left without a
+    clip rather than given a shortened one.
+    """
+    gaps = []
+    if "major" in required and not effective_major(entry, student):
+        gaps.append("major")
+    # Covers both a blank cell and a value the roster importer did not
+    # recognise, since an unrecognised distinction lands as None too.
+    if "honors" in required and entry.honors_level not in HONORS_PHRASES:
+        gaps.append("honors")
+    return gaps
+
+
 def announcement_state(entry: SessionEntry, student: Student) -> str:
     """One of "ready", "stale" or "missing"."""
     if not entry.announcement_audio_path or not entry.announcement_key:
@@ -101,14 +124,22 @@ async def announcement_status(db: AsyncSession, session_id: str) -> dict:
     entries = await _load_entries(db, session_id)
     counts = {"ready": 0, "stale": 0, "missing": 0}
     no_recording = 0
+    required = get_session_options(session_id)["requires"]
+    incomplete = []
     for entry in entries:
         counts[announcement_state(entry, entry.student)] += 1
         if _ipa_for(entry.student) is None:
             no_recording += 1
+        gaps = missing_required(entry, entry.student, required)
+        if gaps:
+            incomplete.append(
+                {"name": entry.student.typed_name, "missing": gaps}
+            )
     return {
         "total": len(entries),
         **counts,
         "no_recording": no_recording,
+        "incomplete": incomplete,
         "running": session_id in _running,
         "failed": list(_progress.get(session_id, {}).get("failed", [])),
     }
@@ -161,12 +192,27 @@ async def _generate_one(db: AsyncSession, entry: SessionEntry) -> None:
 
 async def _run(session_id: str) -> None:
     try:
+        required = get_session_options(session_id)["requires"]
         async with async_session() as db:
-            todo = [
-                (e.id, e.student.typed_name)
-                for e in await _load_entries(db, session_id)
-                if announcement_state(e, e.student) != "ready"
-            ]
+            todo = []
+            for e in await _load_entries(db, session_id):
+                if announcement_state(e, e.student) == "ready":
+                    continue
+                gaps = missing_required(e, e.student, required)
+                if gaps:
+                    # No clip at all, rather than one that quietly leaves a
+                    # part out. It surfaces here so the roster can be fixed
+                    # before the ceremony instead of during it.
+                    _progress[session_id]["failed"].append(
+                        {
+                            "name": e.student.typed_name,
+                            "message": "needs "
+                            + " and ".join(FIELD_LABELS[g] for g in gaps)
+                            + " on the roster",
+                        }
+                    )
+                    continue
+                todo.append((e.id, e.student.typed_name))
         # Each entry gets its own session so one failure cannot affect the others
         for i, (entry_id, name) in enumerate(todo):
             try:
