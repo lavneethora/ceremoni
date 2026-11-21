@@ -13,7 +13,7 @@ import io
 import re
 from collections import defaultdict
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import SessionEntry, Student
@@ -133,7 +133,16 @@ async def import_roster(db: AsyncSession, session_id: str, csv_bytes: bytes) -> 
     query = select(Student)
     form = get_session_options(session_id).get("form")
     if form:
-        query = query.where(from_form(form_source(form).key))
+        # Plus the students this importer created itself for roster rows that
+        # matched nobody. They came from no form, so they carry no response
+        # id, and leaving them out would make every re-import build a second
+        # copy of each one.
+        query = query.where(
+            or_(
+                from_form(form_source(form).key),
+                Student.ms_form_response_id.is_(None),
+            )
+        )
 
     students = (await db.execute(query)).scalars().all()
     index = _Index(list(students))
