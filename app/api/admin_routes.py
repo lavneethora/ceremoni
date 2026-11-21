@@ -32,7 +32,11 @@ from app.services.checkin_links import (
     parse_card_code,
     seat_signature,
 )
-from app.services.config_loader import get_session_options, known_session
+from app.services.config_loader import (
+    any_sessions_loaded,
+    get_session_options,
+    known_session,
+)
 from app.services.roster_import import RosterImportError, clear_roster, import_roster
 from app.services.storage_cleanup import delete_orphans
 from app.services.seating import (
@@ -681,7 +685,15 @@ async def sync_forms(request: Request, s: str | None = None):
     # back to the environment's Form, which is what a stale tab would send
     # after a session is renamed.
     if s is not None and not known_session(s):
-        raise HTTPException(404, "Unknown session. Reload the page and try again.")
+        # Tell the two cases apart. No sessions at all means ceremony.yaml
+        # never loaded, and every sync would fail this way until it does.
+        if not any_sessions_loaded():
+            raise HTTPException(
+                503,
+                "No ceremony config is loaded, so no session has a Form. "
+                "Press Reload Config, which reports what is wrong with it.",
+            )
+        raise HTTPException(404, "That session is not in the loaded config. Reload the page.")
     options = get_session_options(s) if s else {}
     form = options.get("form")
 
