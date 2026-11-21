@@ -434,11 +434,25 @@ async def sync(
 
                 from sqlalchemy import select as sa_select
 
-                # Check if student exists
+                # Students imported before response ids were scoped stored the
+                # bare number. Matching only the scoped id would not find them
+                # and every one would import a second time, so this Form also
+                # claims its own unscoped ids and rewrites them on the way past.
+                known_ids = [stored_id]
+                if src.key == settings.ms_form_key and ":" not in response_id:
+                    known_ids.append(response_id)
+
                 existing = await session.execute(
-                    sa_select(Student).where(Student.ms_form_response_id == stored_id)
+                    sa_select(Student).where(Student.ms_form_response_id.in_(known_ids))
                 )
                 existing_student = existing.scalar_one_or_none()
+
+                if existing_student and existing_student.ms_form_response_id != stored_id:
+                    print(
+                        f"Forms sync: scoping response id for {existing_student.typed_name}: "
+                        f"{existing_student.ms_form_response_id} -> {stored_id}"
+                    )
+                    existing_student.ms_form_response_id = stored_id
 
                 if existing_student:
                     rec_check = await session.execute(
