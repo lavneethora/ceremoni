@@ -412,7 +412,9 @@ syncBtn.addEventListener('click', async () => {
             }
         } else {
             syncBtn.textContent = 'Sync failed';
-            alert('Sync error: ' + (data.message || 'Unknown error'));
+            // detail is what FastAPI puts an HTTPException's text in; message
+            // is what the sync itself returns. Showing only one hid real errors.
+            alert('Sync error: ' + (data.message || data.detail || `HTTP ${resp.status}`));
         }
     } catch (e) {
         syncBtn.textContent = 'Sync error';
