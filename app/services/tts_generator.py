@@ -8,6 +8,17 @@ from app.config import settings
 SSML_OPEN = '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">'
 
 
+class NoPronunciation(Exception):
+    """We have no recorded pronunciation for this name, so we will not say it.
+
+    There is deliberately no spelling-based fallback anywhere in this module.
+    Reading a name off its spelling is the failure this system exists to
+    prevent, and when it happened silently it reached three ceremonies
+    unnoticed. A name we cannot pronounce is reported as "recording could not
+    be processed" and a human deals with it.
+    """
+
+
 def clean_ipa(ipa: str) -> str:
     # Strip stray delimiters. Stress marks (ˈ primary, ˌ secondary) are kept:
     # Azure uses them to decide which syllable to lean on, and without them
@@ -17,13 +28,20 @@ def clean_ipa(ipa: str) -> str:
     return ipa.strip()
 
 
-def name_markup(name: str, ipa: str | None) -> str:
-    if ipa:
-        return f"<phoneme alphabet=\"ipa\" ph={quoteattr(ipa)}>{escape(name)}</phoneme>"
-    return escape(name)
+def name_markup(name: str, ipa: str) -> str:
+    """The name wrapped in the pronunciation taken from its recording.
+
+    IPA is not optional and there is no branch for its absence. One used to
+    exist and returned the bare name, which Azure then read off its spelling.
+    Callers raise before reaching here; this raises too, so the spelling path
+    is not in the codebase to be reintroduced by a future caller.
+    """
+    if not ipa:
+        raise NoPronunciation("Recording could not be processed: no pronunciation available")
+    return f"<phoneme alphabet=\"ipa\" ph={quoteattr(ipa)}>{escape(name)}</phoneme>"
 
 
-def announcement_markup(name: str, ipa: str | None, major: str | None, honors_phrase: str | None) -> str:
+def announcement_markup(name: str, ipa: str, major: str | None, honors_phrase: str | None) -> str:
     parts = [name_markup(name, ipa)]
     if major:
         parts.append('<break time="350ms"/>' + escape(major))
@@ -34,17 +52,6 @@ def announcement_markup(name: str, ipa: str | None, major: str | None, honors_ph
 
 def build_ssml(inner: str) -> str:
     return f'{SSML_OPEN}<voice name="{settings.tts_voice}">{inner}</voice></speak>'
-
-
-class NoPronunciation(Exception):
-    """We have no recorded pronunciation for this name, so we will not say it.
-
-    There is deliberately no spelling-based fallback anywhere in this module.
-    Reading a name off its spelling is the failure this system exists to
-    prevent, and when it happened silently it reached three ceremonies
-    unnoticed. A name we cannot pronounce is reported as "recording could not
-    be processed" and a human deals with it.
-    """
 
 
 def _speak(markup: str | None) -> bytes:
