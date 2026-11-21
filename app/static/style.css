@@ -158,9 +158,14 @@ header h1 {
 select {
     font-family: inherit;
     font-size: 13px;
-    /* Extra room on the right so the native arrow is not crowded into the
-       border. The browser insets it by padding-right. */
-    padding: 8px 16px 8px 12px;
+    /* The native arrow ignores padding-right on macOS and sits against the
+       border, so it is replaced with one we can position. */
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%231a1a1a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding: 8px 38px 8px 12px;
     border: 1px solid #e5e5e5;
     background: #fff;
     color: #1a1a1a;
