@@ -32,7 +32,7 @@ from app.services.checkin_links import (
     parse_card_code,
     seat_signature,
 )
-from app.services.config_loader import get_session_options
+from app.services.config_loader import get_session_options, known_session
 from app.services.roster_import import RosterImportError, clear_roster, import_roster
 from app.services.storage_cleanup import delete_orphans
 from app.services.seating import (
@@ -677,6 +677,11 @@ async def sync_forms(request: Request, s: str | None = None):
 
     # Each session names the Form it collects from, so syncing while the
     # Medallion session is selected cannot pull the demo Form's responses.
+    # An id the config does not know is refused rather than quietly falling
+    # back to the environment's Form, which is what a stale tab would send
+    # after a session is renamed.
+    if s is not None and not known_session(s):
+        raise HTTPException(404, "Unknown session. Reload the page and try again.")
     form = get_session_options(s)["form"] if s else None
 
     from app.services.forms_sync import sync
