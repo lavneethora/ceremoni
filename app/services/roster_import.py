@@ -123,7 +123,19 @@ async def import_roster(db: AsyncSession, session_id: str, csv_bytes: bytes) -> 
     if not columns.keys() & {"r_number", "email", "name"}:
         raise RosterImportError("The file needs at least one of: R number, email, name")
 
-    students = (await db.execute(select(Student))).scalars().all()
+    # Only students who submitted this session's own Form. Someone who filled
+    # in two forms has a row for each, and matching across all of them makes
+    # their R number ambiguous and skips them. A session that names no Form
+    # keeps the old behaviour of matching everyone.
+    from app.services.config_loader import get_session_options
+    from app.services.forms_sync import form_source, from_form
+
+    query = select(Student)
+    form = get_session_options(session_id).get("form")
+    if form:
+        query = query.where(from_form(form_source(form).key))
+
+    students = (await db.execute(query)).scalars().all()
     index = _Index(list(students))
     entries = {
         e.student_id: e
