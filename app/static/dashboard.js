@@ -373,7 +373,7 @@ playNextBtn.addEventListener('click', async () => {
         nowPlaying.style.display = 'block';
         const started = document.querySelector('.student-row.played');
         if (isSeatingSession() && !started) {
-            nowPlayingName.textContent = 'No one is seated yet';
+            nowPlayingName.textContent = 'No students to play';
             nowPlayingMeta.textContent = '';
             return;
         }
