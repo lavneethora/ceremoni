@@ -442,10 +442,26 @@ async def sync(
                 if src.key == settings.ms_form_key and ":" not in response_id:
                     known_ids.append(response_id)
 
-                existing = await session.execute(
-                    sa_select(Student).where(Student.ms_form_response_id.in_(known_ids))
+                found = (
+                    await session.execute(
+                        sa_select(Student).where(Student.ms_form_response_id.in_(known_ids))
+                    )
+                ).scalars().all()
+
+                # An earlier sync may already have made the scoped copy while
+                # the bare one is still there, which is two rows for one
+                # response. Keep the scoped one, and never rename a bare id on
+                # top of an id another row already holds.
+                existing_student = next(
+                    (s for s in found if s.ms_form_response_id == stored_id),
+                    found[0] if found else None,
                 )
-                existing_student = existing.scalar_one_or_none()
+                if len(found) > 1:
+                    others = [s.typed_name for s in found if s is not existing_student]
+                    print(
+                        f"Forms sync: response {response_id} matches {len(found)} students; "
+                        f"keeping {existing_student.typed_name}, leaving {', '.join(others)}"
+                    )
 
                 if existing_student and existing_student.ms_form_response_id != stored_id:
                     print(
