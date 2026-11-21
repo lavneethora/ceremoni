@@ -353,6 +353,21 @@ def _get_row_value(row, col_index, key):
     return ""
 
 
+def from_form(key: str):
+    """SQL filter for the students that came from the Form with this key.
+
+    Ids stored before Forms were named per session carry no prefix at all,
+    and every one of those came from the Form the environment still points
+    at, so that Form claims them too.
+    """
+    from sqlalchemy import or_
+
+    prefixed = Student.ms_form_response_id.like(f"{key}:%")
+    if key == settings.ms_form_key:
+        return or_(prefixed, Student.ms_form_response_id.notlike("%:%"))
+    return prefixed
+
+
 async def _enroll_from_form(session, session_id: str, student_ids: set) -> int:
     """Put everyone this Form imported onto the session's roster.
 
