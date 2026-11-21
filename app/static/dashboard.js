@@ -57,10 +57,19 @@ function isRosterSession() {
     return (sessionOptions[currentSessionId] || {}).roster === true;
 }
 
+// A session that enrols whoever submitted its form has no roster to import,
+// so the import control would only invite someone to overwrite it with a CSV.
+function enrolsFromForm() {
+    return (sessionOptions[currentSessionId] || {}).enroll === 'form';
+}
+
 sessionSelect.addEventListener('change', async () => {
     currentSessionId = sessionSelect.value;
     clearTimeout(statusTimer);
     rosterTools.hidden = !isRosterSession();
+    // Only the import control goes: this group also holds Generate
+    // announcements and Clear roster, which a form-enrolled session needs.
+    importBtn.hidden = enrolsFromForm();
     announceStatus.textContent = '';
     if (currentSessionId) {
         await loadStudents();
