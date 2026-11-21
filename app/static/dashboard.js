@@ -40,7 +40,10 @@ async function init() {
         // stops cluttering the picker
         if (!event.active) continue;
         for (const session of event.sessions) {
-            sessionOptions[session.id] = {roster: session.roster, order: session.order};
+            // Keep the whole session, not a hand-picked few fields. Copying
+            // them one by one meant adding a per-session option server side
+            // and having it silently never arrive here.
+            sessionOptions[session.id] = session;
             const opt = document.createElement('option');
             opt.value = session.id;
             opt.textContent = event.name + ' — ' + session.label;
