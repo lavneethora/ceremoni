@@ -12,6 +12,7 @@ import yaml
 from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.db import async_session
 from app.models import (
     CeremonySession,
@@ -32,6 +33,16 @@ _session_options: dict[str, dict] = {}
 def get_session_options(session_id: str) -> dict:
     """Per-session YAML options ("roster", "order", "form"), rebuilt on every load."""
     return _session_options.get(session_id, {"roster": False, "order": None, "form": None})
+
+
+def known_session(session_id: str) -> bool:
+    """Whether this id belongs to a session the loaded config knows about.
+
+    Lets callers tell "this session uses the default Form" apart from "this
+    id means nothing", so a stale id from an open tab fails loudly instead of
+    quietly syncing whichever Form the environment names.
+    """
+    return session_id in _session_options
 
 
 def session_forms() -> list[dict]:
@@ -59,8 +70,13 @@ def _form_options(session_data: dict) -> dict | None:
 
 def _validate(config: dict) -> str | None:
     seen_events = set()
-    # key -> (workbook, folder), so the same key never names two different Forms
-    forms_by_key: dict[str, tuple] = {}
+    # key -> (workbook, folder), so the same key never names two different
+    # Forms. Seeded with the environment's Form, since a session reusing that
+    # key for a different workbook collides just as badly as two sessions do.
+    forms_by_key: dict[str, tuple] = {
+        settings.ms_form_key: (settings.ms_workbook_name, settings.ms_forms_folder)
+    }
+    keys_by_form: dict[tuple, str] = {v: k for k, v in forms_by_key.items()}
     for event_data in config["events"]:
         name = event_data.get("name")
         if not name:
@@ -95,7 +111,15 @@ def _validate(config: dict) -> str | None:
                         f"Session '{label}' reuses form key '{form['key']}' for a "
                         "different workbook or folder. Response ids are numbered from "
                         "1 per form and scoped by this key, so two forms sharing one "
-                        "key would silently skip each other's submissions."
+                        "key would silently skip each other's submissions. If this key "
+                        "matches MS_FORM_KEY, the environment names a different "
+                        "workbook than this session does."
+                    )
+                if keys_by_form.setdefault(shape, form["key"]) != form["key"]:
+                    return (
+                        f"Session '{label}' gives form key '{form['key']}' to the same "
+                        f"workbook already keyed '{keys_by_form[shape]}'. One Form under "
+                        "two keys imports every response twice, once under each."
                     )
     return None
 
