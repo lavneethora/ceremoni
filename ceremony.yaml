@@ -56,7 +56,6 @@ events:
         date: "TBD"
         time: "TBD"
         roster: true
-        order: seating
         # An honors ceremony announces a distinction for everyone who walks,
         # so a student missing one gets no clip and is listed, rather than a
         # clip that sounds fine with the distinction quietly left out.
@@ -77,7 +76,6 @@ events:
         # roster, so there is no CSV to import. Only the real ceremony takes
         # a roster from the Honors College.
         enroll: form
-        order: seating
         form:
           key: form1
           workbook: "Ceremoni - Graduation Name Pronunciation.xlsx"
