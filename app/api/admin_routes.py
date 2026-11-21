@@ -64,6 +64,9 @@ def _student_payload(row, roster: bool = False) -> dict:
     recordings = student.recordings
     return {
         "id": student.id,
+        # Lets the dashboard play one announcement to check it, without
+        # going through the queue or marking anyone as announced.
+        "entry_id": row.entry.id if row.entry else None,
         "typed_name": student.typed_name,
         "college": student.college,
         "major": row.major,
