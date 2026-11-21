@@ -27,6 +27,7 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "ceremony.yaml
 
 VALID_ORDERS = (None, "seating")
 VALID_ENROLL = (None, "form")
+VALID_REQUIRES = ("major", "honors")
 
 _session_options: dict[str, dict] = {}
 
@@ -34,7 +35,8 @@ _session_options: dict[str, dict] = {}
 def get_session_options(session_id: str) -> dict:
     """Per-session YAML options ("roster", "order", "form"), rebuilt on every load."""
     return _session_options.get(
-        session_id, {"roster": False, "order": None, "form": None, "enroll": None}
+        session_id,
+        {"roster": False, "order": None, "form": None, "enroll": None, "requires": []},
     )
 
 
@@ -98,6 +100,16 @@ def _validate(config: dict) -> str | None:
             seen_labels.add(label)
             if session_data.get("order") not in VALID_ORDERS:
                 return f"Session '{label}' has an invalid order (allowed: seating)"
+
+            requires = session_data.get("requires") or []
+            if not isinstance(requires, list):
+                return f"Session '{label}' has a requires that is not a list"
+            unknown = [r for r in requires if r not in VALID_REQUIRES]
+            if unknown:
+                return (
+                    f"Session '{label}' requires {', '.join(unknown)}, which is not "
+                    f"something an announcement has (allowed: {', '.join(VALID_REQUIRES)})"
+                )
 
             enroll = session_data.get("enroll")
             if enroll not in VALID_ENROLL:
@@ -212,6 +224,7 @@ async def load_ceremony_config():
                     "order": session_data.get("order"),
                     "form": _form_options(session_data),
                     "enroll": session_data.get("enroll"),
+                    "requires": list(session_data.get("requires") or []),
                 }
 
         stale = await session.execute(
