@@ -425,8 +425,19 @@ syncBtn.addEventListener('click', async () => {
         const resp = await fetch(url, {method: 'POST'});
         const data = await resp.json();
         if (data.status === 'ok') {
-            syncBtn.textContent = data.synced > 0 ? `Synced ${data.synced} new` : 'No new responses';
-            if (data.synced > 0 && currentSessionId) {
+            // A session that enrols from its form adds people the sync did not
+            // have to create, so counting only new students called that "no new
+            // responses" and skipped the redraw, leaving a list that looked
+            // empty when it was not.
+            const added = data.added_to_roster || 0;
+            if (data.synced > 0) {
+                syncBtn.textContent = `Synced ${data.synced} new`;
+            } else if (added > 0) {
+                syncBtn.textContent = `Added ${added} to roster`;
+            } else {
+                syncBtn.textContent = 'No new responses';
+            }
+            if ((data.synced > 0 || added > 0) && currentSessionId) {
                 await loadStudents();
             }
         } else {
