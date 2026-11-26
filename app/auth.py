@@ -204,51 +204,85 @@ def verify_password(password: str, stored: str) -> bool:
 # working through a list against a form on the public internet, and the
 # account the Honors College uses will have a password a person can type.
 #
-# Counts live in a fixed number of buckets chosen by hashing the name and the
-# address together. Nothing is ever evicted, so memory is bounded by the
-# table itself and an attacker cannot flush their own counter by flooding the
-# map with other names, which is what any eviction policy would let them do.
+# Counted along two axes, each bounded by something real rather than by a cap
+# that has to evict:
 #
-# Two different people can share a bucket. That makes the limit stricter for
-# them, never looser, and with this many buckets and this few accounts it is
-# not something anyone will meet.
+#   by account  only names that exist get an entry, so the table can never
+#               hold more than there are accounts, and a flood of invented
+#               names cannot crowd anything out
+#   by address  one entry per address, so a single seat cannot work through
+#               the accounts that do exist
+#
+# Nothing is evicted and nothing shares a slot, so no amount of traffic can
+# clear or inflate somebody else's count.
 FAIL_WINDOW_SECONDS = 15 * 60
+# The address is the real defence: it stops one person guessing. The account
+# limit is a backstop against guessing spread over many addresses, and is set
+# far higher on purpose, because a low one lets anyone who knows the username
+# lock the Honors College out of their own ceremony.
 FAIL_LIMIT = 8
-FAIL_BUCKETS = 1024
+ACCOUNT_FAIL_LIMIT = 40
+MAX_ADDRESSES = 4096
+MAX_PER_KEY = 64
 MAX_KEY_PART = 64
 
-_FAILURES: list[list[float]] = [[] for _ in range(FAIL_BUCKETS)]
+_FAILS_BY_ACCOUNT: dict[str, list[float]] = {}
+_FAILS_BY_ADDRESS: dict[str, list[float]] = {}
 
 
-def _bucket(username: str, client: str) -> int:
-    raw = f"{username[:MAX_KEY_PART]}\x00{client[:MAX_KEY_PART]}".encode()
-    return int.from_bytes(hashlib.sha256(raw).digest()[:4], "big") % FAIL_BUCKETS
-
-
-def _recent(index: int, now: float) -> list[float]:
-    times = [t for t in _FAILURES[index] if now - t < FAIL_WINDOW_SECONDS]
-    _FAILURES[index] = times
+def _fresh(store: dict, key: str, now: float) -> list[float]:
+    times = [t for t in store.get(key, []) if now - t < FAIL_WINDOW_SECONDS]
+    if times:
+        store[key] = times
+    else:
+        store.pop(key, None)
     return times
 
 
 def too_many_failures(username: str, client: str) -> bool:
-    """Whether this name from this address has guessed wrong too often lately."""
-    return len(_recent(_bucket(username, client), time.time())) >= FAIL_LIMIT
-
-
-def record_failure(username: str, client: str) -> None:
+    """Whether this account, or this address, has guessed wrong too often."""
     now = time.time()
-    index = _bucket(username, client)
-    times = _recent(index, now)
-    # Counting past the limit buys nothing and is the only way a bucket could
-    # grow, so it stops there.
-    if len(times) < FAIL_LIMIT:
+    return (
+        len(_fresh(_FAILS_BY_ACCOUNT, username[:MAX_KEY_PART], now)) >= ACCOUNT_FAIL_LIMIT
+        or len(_fresh(_FAILS_BY_ADDRESS, client[:MAX_KEY_PART], now)) >= FAIL_LIMIT
+    )
+
+
+def record_failure(username: str, client: str, account_exists: bool) -> None:
+    """Count a wrong guess.
+
+    `account_exists` keeps invented names out of the account table, which is
+    what makes it bounded: there is no way to create an entry for a name that
+    is not real. Those guesses still count against the address.
+    """
+    now = time.time()
+
+    if account_exists:
+        times = _FAILS_BY_ACCOUNT.setdefault(username[:MAX_KEY_PART], [])
         times.append(now)
-        _FAILURES[index] = times
+        # Keeping the newest means guessing on while locked keeps extending
+        # the lock, without the list growing.
+        if len(times) > MAX_PER_KEY:
+            del times[:-MAX_PER_KEY]
+
+    address = client[:MAX_KEY_PART]
+    if address not in _FAILS_BY_ADDRESS and len(_FAILS_BY_ADDRESS) >= MAX_ADDRESSES:
+        for key in list(_FAILS_BY_ADDRESS):
+            _fresh(_FAILS_BY_ADDRESS, key, now)
+        # Still full of live counters, so this address goes untracked rather
+        # than evicting one. Evicting is how a flood would clear its own, and
+        # the account axis holds either way.
+        if address not in _FAILS_BY_ADDRESS and len(_FAILS_BY_ADDRESS) >= MAX_ADDRESSES:
+            return
+    times = _FAILS_BY_ADDRESS.setdefault(address, [])
+    times.append(now)
+    if len(times) > MAX_PER_KEY:
+        del times[:-MAX_PER_KEY]
 
 
 def clear_failures(username: str, client: str) -> None:
-    _FAILURES[_bucket(username, client)] = []
+    _FAILS_BY_ACCOUNT.pop(username[:MAX_KEY_PART], None)
+    _FAILS_BY_ADDRESS.pop(client[:MAX_KEY_PART], None)
 
 
 # --- Authorization --------------------------------------------------------
