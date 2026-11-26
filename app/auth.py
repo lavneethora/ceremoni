@@ -7,7 +7,7 @@ import msal
 from fastapi import Request, HTTPException
 
 from app.config import settings
-from app.models.user import ROLE_ADMIN
+from app.models.user import ROLE_ADMIN, ROLE_READER
 
 AUTHORITY = f"https://login.microsoftonline.com/{settings.ms_tenant_id}"
 SCOPES = ["User.Read", "Files.Read"]
@@ -174,6 +174,12 @@ def hash_password(password: str) -> str:
     return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${salt.hex()}${key.hex()}"
 
 
+# Checked when no such account exists, so a missing username costs about the
+# same as a wrong password and the form cannot be used to discover which
+# accounts are real by watching how fast it answers.
+TIMING_DECOY = hash_password(secrets.token_urlsafe(32))
+
+
 def verify_password(password: str, stored: str) -> bool:
     """Whether the password matches, re-deriving with that hash's own cost."""
     try:
@@ -217,3 +223,13 @@ def require_role(request: Request, *allowed: str):
 
 def require_admin(request: Request):
     return require_role(request)
+
+
+# Dependency forms, for routers that declare access in the decorator rather
+# than by calling a guard in the body.
+def admin_only(request: Request):
+    return require_role(request, ROLE_ADMIN)
+
+
+def admin_or_reader(request: Request):
+    return require_role(request, ROLE_ADMIN, ROLE_READER)
