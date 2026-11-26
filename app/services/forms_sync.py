@@ -442,7 +442,7 @@ async def sync(
 
             from sqlalchemy import select as sa_select
 
-            from app.services.roster_import import normalize_r_number
+            from app.services.roster_import import normalize_name, normalize_r_number
 
             # Students the roster import created from the Honors College list
             # who had not submitted yet. They hold a place on the roster, with
@@ -536,6 +536,26 @@ async def sync(
                 if existing_student is None:
                     r_number = normalize_r_number(_get_row_value(row, col_index, "r_number"))
                     stubs = stubs_by_r.get(r_number, []) if r_number else []
+
+                    # An R number is typed into an open form, so by itself it
+                    # is a claim rather than proof, and a mistyped one lands
+                    # on somebody else's roster place. Surnames have to agree
+                    # too: tolerant of a middle name or a preferred first
+                    # name, which differ between the Honors list and what
+                    # students type, and enough to stop a wrong number
+                    # quietly taking a real student's record.
+                    if len(stubs) == 1:
+                        submitted = normalize_name(_get_row_value(row, col_index, "name")).split()
+                        on_roster = normalize_name(stubs[0].typed_name or "").split()
+                        if not submitted or not on_roster or submitted[-1] != on_roster[-1]:
+                            print(
+                                f"Forms sync: R number {r_number} is on the roster as "
+                                f"{stubs[0].typed_name!r} but was submitted as "
+                                f"{_get_row_value(row, col_index, 'name')!r}. Surnames differ, "
+                                "so not adopting. Check for a mistyped R number."
+                            )
+                            stubs = []
+
                     if len(stubs) == 1:
                         existing_student = stubs.pop()
                         existing_student.ms_form_response_id = stored_id
