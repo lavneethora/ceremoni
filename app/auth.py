@@ -203,51 +203,52 @@ def verify_password(password: str, stored: str) -> bool:
 # scrypt makes each guess cost something, but not enough to matter to someone
 # working through a list against a form on the public internet, and the
 # account the Honors College uses will have a password a person can type.
-_FAILURES: dict[tuple, list[float]] = {}
+#
+# Counts live in a fixed number of buckets chosen by hashing the name and the
+# address together. Nothing is ever evicted, so memory is bounded by the
+# table itself and an attacker cannot flush their own counter by flooding the
+# map with other names, which is what any eviction policy would let them do.
+#
+# Two different people can share a bucket. That makes the limit stricter for
+# them, never looser, and with this many buckets and this few accounts it is
+# not something anyone will meet.
 FAIL_WINDOW_SECONDS = 15 * 60
 FAIL_LIMIT = 8
-MAX_TRACKED = 2000
-
-
-# A username arrives from a form and is not bounded by anything until it
-# reaches the column, so it is cut to the column's own width before being
-# used as a key. Nothing is lost: a longer one cannot match an account.
+FAIL_BUCKETS = 1024
 MAX_KEY_PART = 64
 
+_FAILURES: list[list[float]] = [[] for _ in range(FAIL_BUCKETS)]
 
-def _fail_key(username: str, client: str) -> tuple:
-    return (username[:MAX_KEY_PART], client[:MAX_KEY_PART])
+
+def _bucket(username: str, client: str) -> int:
+    raw = f"{username[:MAX_KEY_PART]}\x00{client[:MAX_KEY_PART]}".encode()
+    return int.from_bytes(hashlib.sha256(raw).digest()[:4], "big") % FAIL_BUCKETS
+
+
+def _recent(index: int, now: float) -> list[float]:
+    times = [t for t in _FAILURES[index] if now - t < FAIL_WINDOW_SECONDS]
+    _FAILURES[index] = times
+    return times
 
 
 def too_many_failures(username: str, client: str) -> bool:
-    """Whether this name from this address has guessed wrong too often lately.
-
-    Keyed on both, so one person failing cannot lock an account for everyone
-    else, and one address cannot work through many names from a single seat.
-    """
-    now = time.time()
-    recent = [t for t in _FAILURES.get(_fail_key(username, client), []) if now - t < FAIL_WINDOW_SECONDS]
-    if recent:
-        _FAILURES[_fail_key(username, client)] = recent
-    return len(recent) >= FAIL_LIMIT
+    """Whether this name from this address has guessed wrong too often lately."""
+    return len(_recent(_bucket(username, client), time.time())) >= FAIL_LIMIT
 
 
 def record_failure(username: str, client: str) -> None:
     now = time.time()
-    if len(_FAILURES) >= MAX_TRACKED:
-        for key, times in list(_FAILURES.items()):
-            if not times or now - times[-1] > FAIL_WINDOW_SECONDS:
-                _FAILURES.pop(key, None)
-        # Dropping only the stale ones is no bound at all when every entry is
-        # fresh, which is exactly what a fast run of guesses looks like. The
-        # oldest go regardless, the same way the auth flows above are capped.
-        while len(_FAILURES) >= MAX_TRACKED:
-            _FAILURES.pop(next(iter(_FAILURES)), None)
-    _FAILURES.setdefault(_fail_key(username, client), []).append(now)
+    index = _bucket(username, client)
+    times = _recent(index, now)
+    # Counting past the limit buys nothing and is the only way a bucket could
+    # grow, so it stops there.
+    if len(times) < FAIL_LIMIT:
+        times.append(now)
+        _FAILURES[index] = times
 
 
 def clear_failures(username: str, client: str) -> None:
-    _FAILURES.pop(_fail_key(username, client), None)
+    _FAILURES[_bucket(username, client)] = []
 
 
 # --- Authorization --------------------------------------------------------
