@@ -2,20 +2,22 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import require_admin
+from app.auth import admin_only, admin_or_reader
 from app.db import get_session
 from app.models import Student, Recording, SessionEntry
 from app.services.storage import storage
 from app.services import pipeline
 
-# Students submit via Microsoft Forms sync, not these endpoints — admin-only.
-router = APIRouter(dependencies=[Depends(require_admin)])
+# Students submit via Microsoft Forms sync, not these endpoints. Access is
+# declared per route rather than on the router, because the machine at the
+# stage has to fetch announcement audio while reaching nothing else here.
+router = APIRouter()
 
 AUDIO_EXTENSIONS = {"mp3", "wav", "m4a", "mp4", "ogg", "webm", "flac", "aac", "wma", "opus"}
 MAX_SIZE = 25 * 1024 * 1024
 
 
-@router.post("/upload")
+@router.post("/upload", dependencies=[Depends(admin_only)])
 async def upload(
     audio_file: UploadFile = File(...),
     typed_name: str = Form(...),
@@ -45,7 +47,7 @@ async def upload(
     return {"student_id": student.id, "recording_id": rec.id, "status": "uploaded"}
 
 
-@router.post("/process/{recording_id}")
+@router.post("/process/{recording_id}", dependencies=[Depends(admin_only)])
 async def process_recording(
     recording_id: str,
     session: AsyncSession = Depends(get_session),
@@ -63,7 +65,7 @@ async def process_recording(
     }
 
 
-@router.post("/approve/{recording_id}")
+@router.post("/approve/{recording_id}", dependencies=[Depends(admin_only)])
 async def approve(
     recording_id: str,
     corrected_phonetics: str | None = None,
@@ -88,7 +90,7 @@ async def approve(
     }
 
 
-@router.get("/audio/{recording_id}")
+@router.get("/audio/{recording_id}", dependencies=[Depends(admin_or_reader)])
 async def get_audio(
     recording_id: str,
     session: AsyncSession = Depends(get_session),
@@ -109,7 +111,7 @@ async def get_audio(
     return FileResponse(rec.generated_audio_url, media_type="audio/mpeg", filename="ceremony_audio.mp3")
 
 
-@router.get("/audio/announcement/{entry_id}")
+@router.get("/audio/announcement/{entry_id}", dependencies=[Depends(admin_or_reader)])
 async def get_announcement_audio(
     entry_id: str,
     session: AsyncSession = Depends(get_session),
