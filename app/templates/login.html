@@ -3,14 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ceremoni — Admin Login</title>
+    <title>Ceremoni — Sign in</title>
     <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
 </head>
 <body>
     <div class="login-container">
         <h1>ceremoni</h1>
         <p class="subtitle">Graduation Name Pronunciation Platform</p>
-        <a href="/admin/login" class="btn btn-primary">Sign in with Microsoft</a>
+
+        {% if failed %}
+        <p class="login-error" role="alert">That username and password do not match.</p>
+        {% endif %}
+
+        <!-- Username and password is the usual way in. The Microsoft sign-in
+             below it is only needed by whoever syncs the form, because that
+             is the one thing requiring a Graph token. -->
+        <form class="login-form" method="post" action="/admin/login/local">
+            <label class="login-label" for="username">Username</label>
+            <input class="login-input" id="username" name="username" autocomplete="username"
+                   autocapitalize="none" autocorrect="off" required autofocus>
+
+            <label class="login-label" for="password">Password</label>
+            <input class="login-input" id="password" name="password" type="password"
+                   autocomplete="current-password" required>
+
+            <button class="btn btn-primary" type="submit">Sign in</button>
+        </form>
+
+        <p class="login-divider">or</p>
+        <a href="/admin/login" class="btn">Sign in with Microsoft</a>
     </div>
 </body>
 </html>
