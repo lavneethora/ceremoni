@@ -13,9 +13,12 @@ from app.auth import (
     forget_admin_token,
     get_admin_token,
     require_admin,
+    clear_failures,
+    record_failure,
     require_role,
     take_flow,
     TIMING_DECOY,
+    too_many_failures,
     verify_password,
 )
 from app.db import get_session
@@ -150,6 +153,12 @@ async def login_local(
     username = (form.get("username") or "").strip().lower()
     password = form.get("password") or ""
 
+    client = request.client.host if request.client else "unknown"
+    if too_many_failures(username, client):
+        # Refused before the hash, so guessing cannot be used to keep the
+        # server busy either.
+        return RedirectResponse("/admin?failed=1", status_code=303)
+
     account = (
         await session.execute(select(User).where(User.username == username))
     ).scalar_one_or_none()
@@ -161,8 +170,13 @@ async def login_local(
     if account is None or not verify_password(password, account.password_hash):
         if account is None:
             verify_password(password, TIMING_DECOY)
+        record_failure(username, client)
         return RedirectResponse("/admin?failed=1", status_code=303)
 
+    clear_failures(username, client)
+    # Start a fresh session rather than adding to whatever was there, so a
+    # cookie set before signing in cannot survive into the signed-in one.
+    request.session.clear()
     request.session["user"] = {"name": account.username, "role": account.role}
     return RedirectResponse(
         "/admin/reader" if account.role == ROLE_READER else "/admin/dashboard",
