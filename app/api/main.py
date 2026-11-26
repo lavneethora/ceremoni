@@ -8,10 +8,10 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
 from app.db import async_session, init_db
-from app.api.routes import router
+from app.api.routes import reader_router, router
 from app.api.admin_routes import router as admin_router
 from app.api.checkin_public import router as checkin_router
-from app.auth import require_admin, require_role
+from app.auth import admin_or_reader, require_admin
 
 
 @asynccontextmanager
@@ -44,6 +44,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(reader_router)
 app.include_router(admin_router)
 app.include_router(checkin_router)
 
@@ -86,7 +87,7 @@ async def dashboard(request: Request):
 
 @app.get("/admin/reader")
 async def reader(request: Request):
-    user = require_role(request, ROLE_ADMIN, ROLE_READER)
+    user = admin_or_reader(request)
     return templates.TemplateResponse(request, "reader.html", {"user": user})
 
 
