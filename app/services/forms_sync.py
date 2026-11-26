@@ -438,6 +438,27 @@ async def sync(
         audio_failed = 0
 
         async with async_session() as session:
+            from collections import defaultdict
+
+            from sqlalchemy import select as sa_select
+
+            from app.services.roster_import import normalize_r_number
+
+            # Students the roster import created from the Honors College list
+            # who had not submitted yet. They hold a place on the roster, with
+            # an honors level, and no response id of their own. A submission
+            # matching one by R number should become that record rather than a
+            # second one beside it, which is what a late arrival produces.
+            stubs_by_r: dict[str, list] = defaultdict(list)
+            for stub in (
+                await session.execute(
+                    sa_select(Student).where(Student.ms_form_response_id.is_(None))
+                )
+            ).scalars().all():
+                key = normalize_r_number(stub.r_number or "")
+                if key:
+                    stubs_by_r[key].append(stub)
+
             for row in data_rows:
                 response_id = _get_row_value(row, col_index, "form_response_id")
                 if not response_id:
@@ -495,6 +516,33 @@ async def sync(
                         f"{existing_student.ms_form_response_id} -> {stored_id}"
                     )
                     existing_student.ms_form_response_id = stored_id
+
+                # Nothing holds this response id. Before creating a second
+                # record, see whether this person is already on a roster from
+                # the Honors list and simply had not submitted yet.
+                if existing_student is None:
+                    r_number = normalize_r_number(_get_row_value(row, col_index, "r_number"))
+                    stubs = stubs_by_r.get(r_number, []) if r_number else []
+                    if len(stubs) == 1:
+                        existing_student = stubs.pop()
+                        existing_student.ms_form_response_id = stored_id
+                        # Only what the roster could not know; the Honors list
+                        # stays authoritative for the name and the major.
+                        for field in ("email", "degree_level", "college", "phonetic_hint"):
+                            if not getattr(existing_student, field, None):
+                                value = _get_row_value(row, col_index, field)
+                                if value:
+                                    setattr(existing_student, field, value)
+                        print(
+                            f"Forms sync: {existing_student.typed_name} was already on a roster "
+                            f"without a submission; adopting that record as {stored_id}"
+                        )
+                    elif stubs:
+                        names = ", ".join(s.typed_name for s in stubs)
+                        print(
+                            f"Forms sync: R number {r_number} matches {len(stubs)} roster records "
+                            f"({names}); not adopting, resolve by hand"
+                        )
 
                 if existing_student:
                     rec_check = await session.execute(
