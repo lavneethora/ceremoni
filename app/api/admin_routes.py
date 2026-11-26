@@ -170,7 +170,7 @@ async def login_local(
     if account is None or not verify_password(password, account.password_hash):
         if account is None:
             verify_password(password, TIMING_DECOY)
-        record_failure(username, client)
+        record_failure(username, client, account is not None)
         return RedirectResponse("/admin?failed=1", status_code=303)
 
     clear_failures(username, client)
