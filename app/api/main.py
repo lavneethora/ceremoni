@@ -11,7 +11,7 @@ from app.db import async_session, init_db
 from app.api.routes import router
 from app.api.admin_routes import router as admin_router
 from app.api.checkin_public import router as checkin_router
-from app.auth import require_admin
+from app.auth import require_admin, require_role
 
 
 @asynccontextmanager
@@ -86,7 +86,7 @@ async def dashboard(request: Request):
 
 @app.get("/admin/reader")
 async def reader(request: Request):
-    user = require_admin(request)
+    user = require_role(request, ROLE_ADMIN, ROLE_READER)
     return templates.TemplateResponse(request, "reader.html", {"user": user})
 
 
@@ -141,4 +141,7 @@ async def login_page(request: Request):
     if request.session.get("user"):
         from fastapi.responses import RedirectResponse
         return RedirectResponse("/admin/dashboard")
-    return templates.TemplateResponse(request, "login.html")
+    # failed=1 comes back from a rejected local sign-in, which redirects
+    # rather than rendering, so a refresh cannot repost the password.
+    failed = request.query_params.get("failed") == "1"
+    return templates.TemplateResponse(request, "login.html", {"failed": failed})
