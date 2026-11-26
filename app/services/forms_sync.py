@@ -449,15 +449,28 @@ async def sync(
             # an honors level, and no response id of their own. A submission
             # matching one by R number should become that record rather than a
             # second one beside it, which is what a late arrival produces.
+            #
+            # Only stubs on the session being synced. An R number is unique to
+            # a person, not to a ceremony, so an unscoped match would let one
+            # ceremony's sync claim another's roster record, which is the
+            # cross-contamination naming a Form per session exists to stop.
+            # Without a session there is nothing to scope to, so no adoption.
             stubs_by_r: dict[str, list] = defaultdict(list)
-            for stub in (
-                await session.execute(
-                    sa_select(Student).where(Student.ms_form_response_id.is_(None))
-                )
-            ).scalars().all():
-                key = normalize_r_number(stub.r_number or "")
-                if key:
-                    stubs_by_r[key].append(stub)
+            if session_id:
+                stub_rows = (
+                    await session.execute(
+                        sa_select(Student)
+                        .join(SessionEntry, SessionEntry.student_id == Student.id)
+                        .where(
+                            SessionEntry.session_id == session_id,
+                            Student.ms_form_response_id.is_(None),
+                        )
+                    )
+                ).scalars().all()
+                for stub in stub_rows:
+                    key = normalize_r_number(stub.r_number or "")
+                    if key:
+                        stubs_by_r[key].append(stub)
 
             for row in data_rows:
                 response_id = _get_row_value(row, col_index, "form_response_id")
