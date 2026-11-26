@@ -539,7 +539,7 @@ async def sync(
 
                     # An R number is typed into an open form, so by itself it
                     # is a claim rather than proof, and a mistyped one lands
-                    # on somebody else's roster place. Surnames have to agree
+                    # on somebody else's roster place. Last names have to agree
                     # too: tolerant of a middle name or a preferred first
                     # name, which differ between the Honors list and what
                     # students type, and enough to stop a wrong number
@@ -551,7 +551,7 @@ async def sync(
                             print(
                                 f"Forms sync: R number {r_number} is on the roster as "
                                 f"{stubs[0].typed_name!r} but was submitted as "
-                                f"{_get_row_value(row, col_index, 'name')!r}. Surnames differ, "
+                                f"{_get_row_value(row, col_index, 'name')!r}. Last names differ, "
                                 "so not adopting. Check for a mistyped R number."
                             )
                             stubs = []
