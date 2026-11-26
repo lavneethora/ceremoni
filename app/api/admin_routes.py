@@ -13,11 +13,14 @@ from app.auth import (
     forget_admin_token,
     get_admin_token,
     require_admin,
+    require_role,
     take_flow,
+    TIMING_DECOY,
+    verify_password,
 )
 from app.db import get_session
 from app.models import (
-    Student, Recording, GraduationEvent,
+    ROLE_ADMIN, ROLE_READER, Student, Recording, GraduationEvent, User,
 )
 from app.services.announcements import (
     AnnouncementNotReady,
@@ -131,6 +134,42 @@ async def auth_callback(request: Request):
     return RedirectResponse("/admin/dashboard")
 
 
+@router.post("/login/local")
+async def login_local(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Sign in with a username and password.
+
+    For the people who need Reader and nothing else, and for whom a
+    university account is neither available nor appropriate. Syncing the Form
+    still needs the Microsoft sign-in, because only that produces a Graph
+    token.
+    """
+    form = await request.form()
+    username = (form.get("username") or "").strip().lower()
+    password = form.get("password") or ""
+
+    account = (
+        await session.execute(select(User).where(User.username == username))
+    ).scalar_one_or_none()
+
+    # One message for a bad username and a bad password, so the form cannot be
+    # used to find out which accounts exist. The password is still checked
+    # against a throwaway hash when there is no account, so the two paths take
+    # roughly the same time and cannot be told apart by how long they take.
+    if account is None or not verify_password(password, account.password_hash):
+        if account is None:
+            verify_password(password, TIMING_DECOY)
+        return RedirectResponse("/admin?failed=1", status_code=303)
+
+    request.session["user"] = {"name": account.username, "role": account.role}
+    return RedirectResponse(
+        "/admin/reader" if account.role == ROLE_READER else "/admin/dashboard",
+        status_code=303,
+    )
+
+
 @router.get("/logout")
 async def logout(request: Request):
     forget_admin_token(request)
@@ -145,7 +184,7 @@ async def list_events(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    require_admin(request)
+    require_role(request, ROLE_ADMIN, ROLE_READER)
     result = await session.execute(
         select(GraduationEvent).options(selectinload(GraduationEvent.sessions))
     )
@@ -252,7 +291,7 @@ async def upcoming_students(
     session: AsyncSession = Depends(get_session),
 ):
     """Return the next N unplayed students for a session (for Reader Mode preview)."""
-    require_admin(request)
+    require_role(request, ROLE_ADMIN, ROLE_READER)
 
     if limit < 1:
         limit = 1
@@ -275,7 +314,7 @@ async def play_student(
     session_id: str | None = None,
     session: AsyncSession = Depends(get_session),
 ):
-    require_admin(request)
+    require_role(request, ROLE_ADMIN, ROLE_READER)
 
     # A roster session only ever plays a current announcement clip, checked before anything is marked played
     entry = None
@@ -318,7 +357,7 @@ async def unplay_student(
     session_id: str | None = None,
     session: AsyncSession = Depends(get_session),
 ):
-    require_admin(request)
+    require_role(request, ROLE_ADMIN, ROLE_READER)
     try:
         student = await set_played(session, session_id, student_id, False)
     except LookupError as e:
@@ -417,7 +456,7 @@ async def scan_card(
     through to the legacy per student audio the way /play does when it is given
     no session_id.
     """
-    require_admin(request)
+    require_role(request, ROLE_ADMIN, ROLE_READER)
     body = await request.json()
     parsed = parse_card_code(body.get("code") if isinstance(body, dict) else None)
     if parsed is None:
