@@ -143,27 +143,55 @@ async function playNext() {
             return;
         }
         const data = await resp.json();
-        history.push(student);
-        if (data.audio_url) {
-            audio.src = data.audio_url;
+
+        // Marking someone played happens server side the moment Play is
+        // pressed, so anything that goes wrong after that has to put them
+        // back. Otherwise a clip that fails to load takes the student out of
+        // the queue without ever announcing them, and the only sign of it is
+        // the next name appearing.
+        async function putBack(message) {
+            audio.onended = null;
+            audio.onerror = null;
             try {
-                await audio.play();
+                await fetch('/admin/api/ceremony/unplay/' + student.id
+                    + '?session_id=' + currentSessionId, {method: 'POST'});
             } catch (e) {
-                // autoplay policy may reject, user will see the audio element ready
-                console.warn('audio.play() rejected', e);
+                console.error('could not put the student back', e);
             }
-            audio.onended = async () => {
-                isPlaying = false;
-                await loadQueue();
-            };
-            audio.onerror = async () => {
-                isPlaying = false;
-                await loadQueue();
-            };
-        } else {
-            // No audio available, still advance
             isPlaying = false;
             await loadQueue();
+            showNotice(message);
+        }
+
+        // A student with no announcement never reaches here: playNext returns
+        // early for them and Play is disabled, with render() already saying
+        // the announcement is not ready. They are read aloud from their card.
+        if (!data.audio_url) {
+            isPlaying = false;
+            await loadQueue();
+            return;
+        }
+
+        history.push(student);
+        audio.src = data.audio_url;
+
+        // A clip that will not load is the case that used to pass in silence.
+        audio.onerror = async () => {
+            history.pop();
+            await putBack(`The announcement for ${student.typed_name} would not play. They are still next, try again.`);
+        };
+        audio.onended = async () => {
+            isPlaying = false;
+            await loadQueue();
+        };
+
+        try {
+            await audio.play();
+        } catch (e) {
+            // Usually the browser's autoplay rule rather than a bad clip, so
+            // the student keeps their place and one tap fixes it.
+            history.pop();
+            await putBack('Tap the page once to allow audio, then press Play again.');
         }
     } catch (e) {
         console.error('play failed', e);
