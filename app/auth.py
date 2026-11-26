@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import secrets
 import time
 
@@ -5,6 +7,7 @@ import msal
 from fastapi import Request, HTTPException
 
 from app.config import settings
+from app.models.user import ROLE_ADMIN
 
 AUTHORITY = f"https://login.microsoftonline.com/{settings.ms_tenant_id}"
 SCOPES = ["User.Read", "Files.Read"]
@@ -127,6 +130,7 @@ async def handle_callback(request: Request, record: dict) -> dict:
     return {
         "email": email,
         "name": user_info.get("displayName", ""),
+        "role": ROLE_ADMIN,
         "token_id": _store_admin_token(result["access_token"], int(result.get("expires_in", 3600))),
     }
 
@@ -151,8 +155,65 @@ def handle_student_callback(request: Request, record: dict) -> dict:
     return {"emails": emails, "name": claims.get("name", "")}
 
 
-def require_admin(request: Request):
+# --- Local accounts -------------------------------------------------------
+
+# scrypt from the standard library, so this adds no dependency to a container
+# that has to build and start reliably on the morning of a ceremony. The cost
+# parameters are stored with the hash, so they can be raised later without
+# invalidating any password already set.
+SCRYPT_N = 2**14
+SCRYPT_R = 8
+SCRYPT_P = 1
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    key = hashlib.scrypt(
+        password.encode(), salt=salt, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P
+    )
+    return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${salt.hex()}${key.hex()}"
+
+
+def verify_password(password: str, stored: str) -> bool:
+    """Whether the password matches, re-deriving with that hash's own cost."""
+    try:
+        scheme, n, r, p, salt_hex, key_hex = (stored or "").split("$")
+        if scheme != "scrypt":
+            return False
+        key = hashlib.scrypt(
+            password.encode(),
+            salt=bytes.fromhex(salt_hex),
+            n=int(n),
+            r=int(r),
+            p=int(p),
+        )
+    except (ValueError, TypeError):
+        return False
+    return hmac.compare_digest(key.hex(), key_hex)
+
+
+# --- Authorization --------------------------------------------------------
+
+
+def require_role(request: Request, *allowed: str):
+    """The signed-in user, when their role is one of `allowed`.
+
+    Naming no role means admin. Routes are admin-only unless they say
+    otherwise, so a new endpoint cannot quietly become reachable from the
+    machine at the stage by someone forgetting to think about it.
+    """
     user = request.session.get("user")
     if not user:
         raise HTTPException(401, "Not authenticated")
+
+    # A session that predates roles came through the Microsoft sign-in, which
+    # only admits addresses on the admin allowlist. Reading a missing role as
+    # admin is therefore accurate rather than permissive.
+    role = user.get("role") or ROLE_ADMIN
+    if role not in (allowed or (ROLE_ADMIN,)):
+        raise HTTPException(403, "This account does not have access to that")
     return user
+
+
+def require_admin(request: Request):
+    return require_role(request)
