@@ -198,6 +198,47 @@ def verify_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(key.hex(), key_hex)
 
 
+# --- Failed sign-in throttling -------------------------------------------
+
+# scrypt makes each guess cost something, but not enough to matter to someone
+# working through a list against a form on the public internet, and the
+# account the Honors College uses will have a password a person can type.
+_FAILURES: dict[tuple, list[float]] = {}
+FAIL_WINDOW_SECONDS = 15 * 60
+FAIL_LIMIT = 8
+MAX_TRACKED = 2000
+
+
+def _fail_key(username: str, client: str) -> tuple:
+    return (username, client)
+
+
+def too_many_failures(username: str, client: str) -> bool:
+    """Whether this name from this address has guessed wrong too often lately.
+
+    Keyed on both, so one person failing cannot lock an account for everyone
+    else, and one address cannot work through many names from a single seat.
+    """
+    now = time.time()
+    recent = [t for t in _FAILURES.get(_fail_key(username, client), []) if now - t < FAIL_WINDOW_SECONDS]
+    if recent:
+        _FAILURES[_fail_key(username, client)] = recent
+    return len(recent) >= FAIL_LIMIT
+
+
+def record_failure(username: str, client: str) -> None:
+    now = time.time()
+    if len(_FAILURES) > MAX_TRACKED:
+        for key, times in list(_FAILURES.items()):
+            if not times or now - times[-1] > FAIL_WINDOW_SECONDS:
+                _FAILURES.pop(key, None)
+    _FAILURES.setdefault(_fail_key(username, client), []).append(now)
+
+
+def clear_failures(username: str, client: str) -> None:
+    _FAILURES.pop(_fail_key(username, client), None)
+
+
 # --- Authorization --------------------------------------------------------
 
 
