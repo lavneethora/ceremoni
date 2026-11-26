@@ -2,6 +2,8 @@ let currentSessionId = null;
 let queue = [];
 let currentStudent = null;
 let isPlaying = false;
+// Only the handlers from the most recent play may act on the audio element.
+let playToken = 0;
 let history = []; // stack of student objects played this session (this browser tab)
 
 const HONORS_LABELS = {honors: 'With honors', highest_honors: 'With highest honors'};
@@ -149,14 +151,38 @@ async function playNext() {
         // back. Otherwise a clip that fails to load takes the student out of
         // the queue without ever announcing them, and the only sign of it is
         // the next name appearing.
-        async function putBack(message) {
+        //
+        // Each play carries a token, and only the handlers belonging to the
+        // current one may act. Without that, clearing the audio element
+        // elsewhere fires an error that an old handler would answer by
+        // unplaying a student who was already announced: unlockAudio removes
+        // the source and calls load(), which is exactly that.
+        const token = ++playToken;
+        const sessionAtPlay = currentSessionId;
+        let settled = false;
+
+        function clearHandlers() {
             audio.onended = null;
             audio.onerror = null;
-            try {
-                await fetch('/admin/api/ceremony/unplay/' + student.id
-                    + '?session_id=' + currentSessionId, {method: 'POST'});
-            } catch (e) {
-                console.error('could not put the student back', e);
+        }
+
+        async function settle(action) {
+            if (settled || token !== playToken) return;
+            settled = true;
+            clearHandlers();
+            await action();
+        }
+
+        async function putBack(message) {
+            // The session can be changed while a clip is loading, and the
+            // student only exists on the one they were played from.
+            if (sessionAtPlay === currentSessionId) {
+                try {
+                    await fetch('/admin/api/ceremony/unplay/' + student.id
+                        + '?session_id=' + sessionAtPlay, {method: 'POST'});
+                } catch (e) {
+                    console.error('could not put the student back', e);
+                }
             }
             isPlaying = false;
             await loadQueue();
@@ -172,26 +198,29 @@ async function playNext() {
             return;
         }
 
-        history.push(student);
-        audio.src = data.audio_url;
-
+        clearHandlers();
         // A clip that will not load is the case that used to pass in silence.
-        audio.onerror = async () => {
+        audio.onerror = () => settle(async () => {
             history.pop();
             await putBack(`The announcement for ${student.typed_name} would not play. They are still next, try again.`);
-        };
-        audio.onended = async () => {
+        });
+        audio.onended = () => settle(async () => {
             isPlaying = false;
             await loadQueue();
-        };
+        });
+
+        history.push(student);
+        audio.src = data.audio_url;
 
         try {
             await audio.play();
         } catch (e) {
             // Usually the browser's autoplay rule rather than a bad clip, so
             // the student keeps their place and one tap fixes it.
-            history.pop();
-            await putBack('Tap the page once to allow audio, then press Play again.');
+            await settle(async () => {
+                history.pop();
+                await putBack('Tap the page once to allow audio, then press Play again.');
+            });
         }
     } catch (e) {
         console.error('play failed', e);
@@ -313,6 +342,13 @@ async function unlockAudio() {
     // buys the gesture that every later decode-triggered play inherits.
     // Raced against a timeout: an unlock that will not finish must never be
     // the reason the camera does not open.
+    // Removing the source and calling load() below fires an error event, so
+    // any handler still waiting on a queue clip is retired first rather than
+    // being left to answer it.
+    playToken++;
+    audio.onended = null;
+    audio.onerror = null;
+
     const attempt = (async () => {
         try {
             audio.muted = true;
@@ -418,6 +454,11 @@ async function tick() {
 }
 
 async function announceCard(code) {
+    // Scanning takes over the audio element, so a queue handler must not be
+    // left able to act on what happens to it.
+    playToken++;
+    audio.onended = null;
+    audio.onerror = null;
     isPlaying = true;
     try {
         const resp = await fetch('/admin/api/ceremony/scan', {
