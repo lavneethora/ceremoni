@@ -209,8 +209,14 @@ FAIL_LIMIT = 8
 MAX_TRACKED = 2000
 
 
+# A username arrives from a form and is not bounded by anything until it
+# reaches the column, so it is cut to the column's own width before being
+# used as a key. Nothing is lost: a longer one cannot match an account.
+MAX_KEY_PART = 64
+
+
 def _fail_key(username: str, client: str) -> tuple:
-    return (username, client)
+    return (username[:MAX_KEY_PART], client[:MAX_KEY_PART])
 
 
 def too_many_failures(username: str, client: str) -> bool:
@@ -228,10 +234,15 @@ def too_many_failures(username: str, client: str) -> bool:
 
 def record_failure(username: str, client: str) -> None:
     now = time.time()
-    if len(_FAILURES) > MAX_TRACKED:
+    if len(_FAILURES) >= MAX_TRACKED:
         for key, times in list(_FAILURES.items()):
             if not times or now - times[-1] > FAIL_WINDOW_SECONDS:
                 _FAILURES.pop(key, None)
+        # Dropping only the stale ones is no bound at all when every entry is
+        # fresh, which is exactly what a fast run of guesses looks like. The
+        # oldest go regardless, the same way the auth flows above are capped.
+        while len(_FAILURES) >= MAX_TRACKED:
+            _FAILURES.pop(next(iter(_FAILURES)), None)
     _FAILURES.setdefault(_fail_key(username, client), []).append(now)
 
 
