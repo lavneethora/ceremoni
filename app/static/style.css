@@ -372,3 +372,49 @@ select:focus {
     opacity: 0.3;
     cursor: default;
 }
+
+/* Sign in */
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 260px;
+}
+
+.login-label {
+    font-size: 12px;
+    color: #6b6b6b;
+}
+
+.login-input {
+    font-family: inherit;
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 1px solid #e5e5e5;
+    background-color: #fff;
+    color: #1a1a1a;
+    margin-bottom: 6px;
+}
+
+.login-input:focus {
+    outline: none;
+    border-color: #1a1a1a;
+}
+
+.login-form .btn {
+    margin-top: 6px;
+}
+
+/* Deliberately the same wording for a wrong username and a wrong password,
+   so the form cannot be used to find out which accounts exist. */
+.login-error {
+    color: #a12d2d;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.login-divider {
+    color: #9a9a9a;
+    font-size: 12px;
+    margin: 14px 0 2px;
+}
