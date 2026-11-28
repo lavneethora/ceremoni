@@ -41,6 +41,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=_session_secret,
     https_only=settings.session_cookie_secure,
+    max_age=settings.session_max_age_seconds,
 )
 
 app.include_router(router)
