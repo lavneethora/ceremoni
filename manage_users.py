@@ -1,4 +1,5 @@
-"""Create, list and reset the accounts that sign in with a username and password.
+"""Create, list, rename-by-replacing and delete the accounts that sign in
+with a username and password.
 
 Deliberately a script rather than a page: there will be two or three of these
 and no reason to put account creation on the public internet.
@@ -68,7 +69,29 @@ async def main() -> None:
 
         role = account.role if account else None
         if account:
-            print(f"  '{username}' exists as {account.role}. Setting a new password.")
+            print(f"  '{username}' exists as {account.role}.")
+            print("    p  give it a new password")
+            print("    d  delete it")
+            choice = input("  choose [p]: ").strip().lower() or "p"
+            if choice == "d":
+                # Typed again rather than a yes, because a yes is easy to
+                # give to the wrong line.
+                if input(f"  type '{username}' again to delete it: ").strip().lower() != username:
+                    print("  That did not match. Nothing changed.")
+                    await engine.dispose()
+                    return
+                await db.delete(account)
+                await db.commit()
+                print(f"\n  Deleted {username}.")
+                print("  Anyone signed in as it stays signed in until their")
+                print("  session expires, which is twelve hours at most.")
+                await engine.dispose()
+                return
+            if choice != "p":
+                print("  Nothing changed.")
+                await engine.dispose()
+                return
+            print("  Setting a new password.")
         else:
             print(f"  role {ROLES}")
             role = input(f"  role [{ROLE_READER}]: ").strip().lower() or ROLE_READER
