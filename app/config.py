@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     # Send the session cookie over HTTPS only. Set SESSION_COOKIE_SECURE=false for
     # local development in a browser that will not keep a Secure cookie on http.
     session_cookie_secure: bool = True
+    # How long a sign-in lasts. Sessions are signed cookies, not rows, so
+    # there is no way to end one early: changing a password leaves anyone
+    # already signed in exactly where they were. Twelve hours covers a
+    # ceremony day and bounds how long that can matter, where the fourteen
+    # day default did not.
+    session_max_age_seconds: int = 12 * 60 * 60
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
