@@ -1,4 +1,4 @@
-"""Create and list the accounts that sign in with a username and password.
+"""Create, list and reset the accounts that sign in with a username and password.
 
 Deliberately a script rather than a page: there will be two or three of these
 and no reason to put account creation on the public internet.
@@ -57,23 +57,25 @@ async def main() -> None:
         for u in existing:
             print(f"  {u.username:20} {u.role}")
 
-        print("\nNew account (blank username to stop):")
+        print("\nUsername to add, or an existing one to give a new password.")
+        print("Blank to stop.")
         username = input("  username: ").strip().lower()
         if not username:
             await engine.dispose()
             return
 
-        if any(u.username == username for u in existing):
-            print(f"  '{username}' already exists. Nothing changed.")
-            await engine.dispose()
-            return
+        account = next((u for u in existing if u.username == username), None)
 
-        print(f"  role {ROLES}")
-        role = input(f"  role [{ROLE_READER}]: ").strip().lower() or ROLE_READER
-        if role not in ROLES:
-            print(f"  '{role}' is not a role. Nothing changed.")
-            await engine.dispose()
-            return
+        role = account.role if account else None
+        if account:
+            print(f"  '{username}' exists as {account.role}. Setting a new password.")
+        else:
+            print(f"  role {ROLES}")
+            role = input(f"  role [{ROLE_READER}]: ").strip().lower() or ROLE_READER
+            if role not in ROLES:
+                print(f"  '{role}' is not a role. Nothing changed.")
+                await engine.dispose()
+                return
 
         password = getpass.getpass("  password (hidden): ")
         if len(password) < 12:
@@ -85,9 +87,19 @@ async def main() -> None:
             await engine.dispose()
             return
 
-        db.add(User(username=username, password_hash=hash_password(password), role=role))
-        await db.commit()
-        print(f"\n  Created {username} as {role}.")
+        if account:
+            account.password_hash = hash_password(password)
+            await db.commit()
+            # Whoever forgot the password has usually been guessing at it, and
+            # the throttle does not know the password changed.
+            print(f"\n  New password set for {username}.")
+            print("  If sign-in was being refused, that was the fifteen minute")
+            print("  lockout from wrong guesses. It clears on its own, or")
+            print("  immediately if the server restarts.")
+        else:
+            db.add(User(username=username, password_hash=hash_password(password), role=role))
+            await db.commit()
+            print(f"\n  Created {username} as {role}.")
 
     await engine.dispose()
 
